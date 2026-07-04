@@ -16,7 +16,7 @@
 
 | Area | State |
 |---|---|
-| MVP backend (Epics A–D, search, backup) | ✅ implemented & tested (9/9 backend tests, ruff clean) |
+| MVP backend (Epics A–D, search, backup) | ✅ implemented & tested (10/10 backend tests, ruff clean) |
 | MVP frontend (all screens) | ✅ implemented, type-checks + builds |
 | Docker packaging | ✅ built, run, and verified end-to-end (arm64 + amd64) |
 | Relationships (Epic E, Phase 2) | 🟡 data model only; no service/API/UI |
@@ -71,7 +71,7 @@
 - [x] Download as attachment + nosniff (FR-21 / SEC-6) — ✓ verified
 - [x] Delete file + metadata (FR-21) — ✓ verified
 - [x] Show type/size/date (FR-D5); upload/download/delete UI
-- [ ] **Document rename UI** (PATCH endpoint exists; not surfaced in UI)
+- [x] Document rename UI — ✓ verified
 
 ### Epic F — Search (MVP subset)
 - [x] Search people by name, case-insensitive, ILIKE-escaped (FR-26 / F1) — ✓ verified
@@ -139,7 +139,7 @@
 ## Cross-cutting: quality, security, ops (do alongside phases)
 
 ### Testing
-- [x] Backend: auth, people, fields, documents flows (9 tests) — ✓ passing
+- [x] Backend: auth, people, fields, documents flows (10 tests) — ✓ passing
 - [ ] Backend: password-change flow, session expiry, photo upload validation
 - [ ] Frontend: Vitest + Testing Library — ID-card render, inline edit, pin, sensitive reveal, theme switch
 - [ ] End-to-end acceptance checklist mapped to §13

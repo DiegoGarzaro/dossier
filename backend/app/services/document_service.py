@@ -35,7 +35,8 @@ class DocumentService:
         Args:
             person_id (int): The owning person id.
             upload (UploadFile): The uploaded file.
-            title (str | None): Optional display title; defaults to the filename.
+            title (str | None): Optional display title; defaults to the filename without
+                its extension.
 
         Returns:
             Document: The persisted document metadata.

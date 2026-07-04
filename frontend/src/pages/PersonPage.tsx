@@ -3,12 +3,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Camera,
+  Check,
   Download,
   FileText,
   Pencil,
   Plus,
   Trash2,
   Upload,
+  X,
 } from 'lucide-react'
 import { type DragEvent, type FormEvent, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -120,12 +122,72 @@ function AddFieldForm({ personId, onDone }: { personId: number; onDone: () => vo
 
 function DocumentRow({ document, personId }: { document: DocumentOut; personId: number }) {
   const [confirming, setConfirming] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [title, setTitle] = useState(document.title)
+  const [renameError, setRenameError] = useState<string | null>(null)
   const queryClient = useQueryClient()
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['person', personId] })
 
   const remove = useMutation({
     mutationFn: () => api<void>(`/api/documents/${document.id}`, { method: 'DELETE' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['person', personId] }),
+    onSuccess: invalidate,
   })
+
+  const rename = useMutation({
+    mutationFn: () => api<DocumentOut>(`/api/documents/${document.id}`, { method: 'PATCH', body: { title } }),
+    onSuccess: () => {
+      setRenaming(false)
+      setRenameError(null)
+      invalidate()
+    },
+    onError: (error) => setRenameError(error.message),
+  })
+
+  if (renaming) {
+    return (
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          rename.mutate()
+        }}
+        className="flex items-center gap-3 px-4 py-3 odd:bg-surface-subtle"
+      >
+        <FileText size={18} className="shrink-0 text-subtle" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <input
+            aria-label="Document title"
+            className="h-9 w-full rounded-sm border border-border bg-surface px-3 text-sm focus:border-accent"
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            autoFocus
+            required
+          />
+          {renameError && (
+            <p role="alert" className="mt-1 text-xs text-danger">
+              {renameError}
+            </p>
+          )}
+        </div>
+        <Button type="submit" size="sm" aria-label="Save document title" disabled={rename.isPending}>
+          <Check size={15} />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label="Cancel rename"
+          onClick={() => {
+            setRenaming(false)
+            setTitle(document.title)
+            setRenameError(null)
+          }}
+        >
+          <X size={15} />
+        </Button>
+      </form>
+    )
+  }
 
   return (
     <div className="flex items-center gap-3 px-4 py-3 odd:bg-surface-subtle">
@@ -144,6 +206,14 @@ function DocumentRow({ document, personId }: { document: DocumentOut; personId: 
       >
         <Download size={16} />
       </a>
+      <button
+        type="button"
+        aria-label={`Rename ${document.title}`}
+        className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink"
+        onClick={() => setRenaming(true)}
+      >
+        <Pencil size={16} />
+      </button>
       <button
         type="button"
         aria-label={`Delete ${document.title}`}
