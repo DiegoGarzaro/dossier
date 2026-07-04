@@ -1,0 +1,23 @@
+# Host-built artifacts that must never leak into the image — the build
+# stages install these fresh (uv sync, npm ci) for the container's own
+# platform; copying the host's copies over them breaks the runtime.
+**/.venv/
+**/node_modules/
+**/__pycache__/
+**/*.py[cod]
+**/.pytest_cache/
+**/.ruff_cache/
+frontend/dist/
+backend/app/static/
+
+# Data (SQLite + uploads — never part of the image)
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# VCS / OS / editors
+.git/
+**/.DS_Store
+**/.idea/
+**/.vscode/

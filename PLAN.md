@@ -18,7 +18,7 @@
 |---|---|
 | MVP backend (Epics A–D, search, backup) | ✅ implemented & tested (9/9 backend tests, ruff clean) |
 | MVP frontend (all screens) | ✅ implemented, type-checks + builds |
-| Docker packaging | ✅ Dockerfile + compose written (image build not yet run) |
+| Docker packaging | ✅ built, run, and verified end-to-end (arm64 + amd64) |
 | Relationships (Epic E, Phase 2) | 🟡 data model only; no service/API/UI |
 | Field-value search, JSON export (Phase 3) | ⬜ not started |
 | Multi-user, i18n, OCR, audit (Phase 4) | ⬜ not started |
@@ -77,24 +77,26 @@
 ### Epic G — Data Safety (MVP subset)
 - [x] All persistent data on `/data` volume (FR-28)
 - [x] Backup/restore procedure documented (FR-29 / G1/G2) — README
-- [ ] Manually validate a backup→restore round-trip (acceptance §13.5)
+- [x] Manually validate a backup→restore round-trip (acceptance §13.5) — ✓ verified (stop → tar →
+      wipe `data/` → untar → start → admin session + data intact)
 
 ### MVP packaging & deploy
 - [x] Multi-stage Dockerfile (node build → python runtime)
 - [x] docker-compose.yml with data volume + env
 - [x] Alembic auto-migrate on startup (NFR-8)
-- [ ] **Build the image & run `docker compose up` end-to-end** (not yet executed)
-- [ ] Verify amd64 + arm64 build (NFR-1)
+- [x] Build the image & run `docker compose up` end-to-end — ✓ verified (also uncovered & fixed a real
+      bug, G-17: missing `.dockerignore` let host `.venv`/`node_modules` clobber the image's own)
+- [x] Verify amd64 + arm64 build (NFR-1) — ✓ verified (native arm64 + cross-built linux/amd64 via buildx)
 
 ---
 
 ## MVP definition of done (Acceptance Criteria §13)
 
-- [ ] 1. Fresh `docker compose up` → running app + first-run admin setup
+- [x] 1. Fresh `docker compose up` → running app + first-run admin setup — ✓ verified
 - [~] 2. Create person, add/edit/remove/reorder all 6 field types, pin, card renders (reorder = API only)
 - [x] 3. Upload/download/delete a document with metadata shown — ✓ verified (API)
 - [x] 4. Search people by name — ✓ verified
-- [ ] 5. Data survives container recreation; backup/restore works as documented
+- [x] 5. Data survives container recreation; backup/restore works as documented — ✓ verified
 - [x] 6. All data routes reject unauthenticated access — ✓ verified
 
 ---
@@ -162,10 +164,10 @@
 - [ ] Wordmark/logo asset for "Dossier" (DS-3)
 
 ### Repo & housekeeping
-- [ ] **Initialize git repository** (currently not a git repo) + initial commit
+- [x] Initialize git repository + initial commit — ✓ verified (`origin` set to github.com/DiegoGarzaro/dossier)
 - [ ] Decide whether to rename repo folder `profid` → `dossier`
 - [x] `.gitignore` covers data/, venvs, node_modules, built static
-- [ ] Confirm `uv.lock` + `package-lock.json` committed for reproducible builds
+- [x] Confirm `uv.lock` + `package-lock.json` committed for reproducible builds — ✓ verified
 - [ ] Resolve remaining open decision **D6** (add `select`/`file` field types now vs later)
 
 ---
