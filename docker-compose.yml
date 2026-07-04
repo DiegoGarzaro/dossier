@@ -1,0 +1,14 @@
+services:
+  dossier:
+    build: .
+    image: dossier:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data # database + uploads — this is what you back up (FR-28)
+    environment:
+      - DOSSIER_SECRET_KEY=change-me # override in production
+      - DOSSIER_SESSION_IDLE_DAYS=14
+      - DOSSIER_MAX_UPLOAD_MB=25
+      - DOSSIER_TRUST_PROXY=false # set true behind a TLS reverse proxy (SEC-8)
+    restart: unless-stopped

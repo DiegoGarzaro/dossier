@@ -1,0 +1,46 @@
+/** API types mirroring the backend schemas. */
+
+export type FieldType = 'text' | 'textarea' | 'number' | 'date' | 'boolean' | 'sensitive'
+
+export interface FieldOut {
+  id: number
+  label: string
+  value: string | null
+  type: FieldType
+  is_pinned: boolean
+  position: number
+  updated_at: string
+}
+
+export interface DocumentOut {
+  id: number
+  title: string
+  original_filename: string
+  mime_type: string
+  size_bytes: number
+  uploaded_at: string
+}
+
+export interface PersonSummary {
+  id: number
+  full_name: string
+  has_photo: boolean
+  updated_at: string
+  pinned_fields: FieldOut[]
+}
+
+export interface PersonDetail {
+  id: number
+  full_name: string
+  has_photo: boolean
+  fields: FieldOut[]
+  documents: DocumentOut[]
+  created_at: string
+  updated_at: string
+}
+
+export interface AuthStatus {
+  initialized: boolean
+  authenticated: boolean
+  username: string | null
+}

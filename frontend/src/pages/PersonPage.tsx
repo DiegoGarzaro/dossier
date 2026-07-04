@@ -1,0 +1,437 @@
+/** The ID-card screen — the centerpiece of the product (FR-7, Design System §5.3). */
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  Camera,
+  Download,
+  FileText,
+  Pencil,
+  Plus,
+  Trash2,
+  Upload,
+} from 'lucide-react'
+import { type FormEvent, useRef, useState } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
+
+import { FieldRow, ValueInput } from '../components/FieldRow'
+import { Avatar, Button, Dialog, Input, Spinner } from '../components/ui'
+import { ApiError, api } from '../lib/api'
+import type { DocumentOut, FieldOut, FieldType, PersonDetail } from '../lib/types'
+
+const FIELD_TYPES: { value: FieldType; label: string }[] = [
+  { value: 'text', label: 'Text' },
+  { value: 'textarea', label: 'Long text' },
+  { value: 'number', label: 'Number' },
+  { value: 'date', label: 'Date' },
+  { value: 'boolean', label: 'Yes / No' },
+  { value: 'sensitive', label: 'Sensitive' },
+]
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function SectionHeading({ title, action }: { title: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <h2 className="font-display text-lg font-semibold">{title}</h2>
+      {action}
+    </div>
+  )
+}
+
+function AddFieldForm({ personId, onDone }: { personId: number; onDone: () => void }) {
+  const [label, setLabel] = useState('')
+  const [type, setType] = useState<FieldType>('text')
+  const [value, setValue] = useState('')
+  const queryClient = useQueryClient()
+
+  const create = useMutation({
+    mutationFn: () =>
+      api<FieldOut>(`/api/people/${personId}/fields`, {
+        method: 'POST',
+        body: { label, type, value: value === '' ? null : value },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['person', personId] })
+      onDone()
+    },
+  })
+
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault()
+    create.mutate()
+  }
+
+  return (
+    <form onSubmit={onSubmit} className="space-y-3 border-b border-border bg-surface-subtle px-4 py-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <Input
+          id="field-label"
+          label="Label"
+          value={label}
+          onChange={(event) => setLabel(event.target.value)}
+          autoFocus
+          required
+        />
+        <div className="space-y-1.5">
+          <label htmlFor="field-type" className="label-caps block">
+            Type
+          </label>
+          <select
+            id="field-type"
+            className="h-10 w-full rounded-sm border border-border bg-surface px-3 text-sm focus:border-accent"
+            value={type}
+            onChange={(event) => {
+              setType(event.target.value as FieldType)
+              setValue('')
+            }}
+          >
+            {FIELD_TYPES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="space-y-1.5">
+          <span className="label-caps block">Value</span>
+          <ValueInput type={type} value={value} onChange={setValue} />
+        </div>
+      </div>
+      {create.error instanceof ApiError && (
+        <p role="alert" className="text-sm text-danger">
+          {create.error.message}
+        </p>
+      )}
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="secondary" size="sm" onClick={onDone}>
+          Cancel
+        </Button>
+        <Button type="submit" size="sm" disabled={create.isPending}>
+          Add field
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+function DocumentRow({ document, personId }: { document: DocumentOut; personId: number }) {
+  const [confirming, setConfirming] = useState(false)
+  const queryClient = useQueryClient()
+
+  const remove = useMutation({
+    mutationFn: () => api<void>(`/api/documents/${document.id}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['person', personId] }),
+  })
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 odd:bg-surface-subtle">
+      <FileText size={18} className="shrink-0 text-subtle" aria-hidden />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{document.title}</p>
+        <p className="truncate font-mono text-xs text-muted">
+          {document.mime_type.split('/')[1].toUpperCase()} · {formatSize(document.size_bytes)} ·{' '}
+          {document.uploaded_at.slice(0, 10)}
+        </p>
+      </div>
+      <a
+        href={`/api/documents/${document.id}/download`}
+        aria-label={`Download ${document.title}`}
+        className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink"
+      >
+        <Download size={16} />
+      </a>
+      <button
+        type="button"
+        aria-label={`Delete ${document.title}`}
+        className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-danger"
+        onClick={() => setConfirming(true)}
+      >
+        <Trash2 size={16} />
+      </button>
+      {confirming && (
+        <Dialog title="Delete document?" onClose={() => setConfirming(false)}>
+          <p className="mb-4 text-sm text-muted">
+            “{document.title}” and its file will be permanently deleted.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={() => remove.mutate()} disabled={remove.isPending}>
+              Delete
+            </Button>
+          </div>
+        </Dialog>
+      )}
+    </div>
+  )
+}
+
+export function PersonPage() {
+  const { id } = useParams()
+  const personId = Number(id)
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const [addingField, setAddingField] = useState(false)
+  const [renaming, setRenaming] = useState(false)
+  const [newName, setNewName] = useState('')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const photoInput = useRef<HTMLInputElement>(null)
+  const documentInput = useRef<HTMLInputElement>(null)
+
+  const person = useQuery({
+    queryKey: ['person', personId],
+    queryFn: () => api<PersonDetail>(`/api/people/${personId}`),
+  })
+
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['person', personId] })
+
+  const rename = useMutation({
+    mutationFn: () =>
+      api<PersonDetail>(`/api/people/${personId}`, { method: 'PATCH', body: { full_name: newName } }),
+    onSuccess: () => {
+      setRenaming(false)
+      invalidate()
+      queryClient.invalidateQueries({ queryKey: ['people'] })
+    },
+  })
+
+  const removePerson = useMutation({
+    mutationFn: () => api<void>(`/api/people/${personId}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['people'] })
+      navigate('/')
+    },
+  })
+
+  const uploadPhoto = useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData()
+      form.append('file', file)
+      return api<PersonDetail>(`/api/people/${personId}/photo`, { method: 'PUT', form })
+    },
+    onSuccess: () => {
+      setUploadError(null)
+      invalidate()
+    },
+    onError: (error) => setUploadError(error.message),
+  })
+
+  const uploadDocument = useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData()
+      form.append('file', file)
+      return api<DocumentOut>(`/api/people/${personId}/documents`, { method: 'POST', form })
+    },
+    onSuccess: () => {
+      setUploadError(null)
+      invalidate()
+    },
+    onError: (error) => setUploadError(error.message),
+  })
+
+  if (person.isPending) return <Spinner />
+  if (person.error instanceof ApiError && person.error.status === 404) {
+    return <p className="text-muted">This person no longer exists.</p>
+  }
+  if (!person.data) return <Spinner />
+
+  const detail = person.data
+  const pinned = detail.fields.filter((field) => field.is_pinned)
+  const unpinned = detail.fields.filter((field) => !field.is_pinned)
+
+  return (
+    <div className="mx-auto max-w-3xl space-y-6">
+      {/* ID-card */}
+      <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-(--shadow-card)">
+        <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-start">
+          <button
+            type="button"
+            className="group relative shrink-0 self-center rounded-full sm:self-start"
+            aria-label="Change profile photo"
+            onClick={() => photoInput.current?.click()}
+          >
+            <Avatar
+              name={detail.full_name}
+              photoUrl={
+                detail.has_photo
+                  ? `/api/people/${detail.id}/photo?v=${detail.updated_at}`
+                  : undefined
+              }
+              size={96}
+            />
+            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <Camera size={20} aria-hidden />
+            </span>
+          </button>
+          <input
+            ref={photoInput}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0]
+              if (file) uploadPhoto.mutate(file)
+              event.target.value = ''
+            }}
+          />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-start gap-2">
+              <h1 className="font-display text-3xl leading-tight font-semibold">
+                {detail.full_name}
+              </h1>
+              <button
+                type="button"
+                aria-label="Rename person"
+                className="mt-1.5 rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink"
+                onClick={() => {
+                  setNewName(detail.full_name)
+                  setRenaming(true)
+                }}
+              >
+                <Pencil size={15} />
+              </button>
+            </div>
+            {pinned.length > 0 && (
+              <dl className="mt-4 space-y-2 border-l-2 border-seal pl-3">
+                {pinned.map((field) => (
+                  <div key={field.id} className="grid grid-cols-[minmax(120px,auto)_1fr] gap-x-3">
+                    <dt className="label-caps">{field.label}</dt>
+                    <dd className="text-[15px]">
+                      {field.value ? (
+                        <span className={field.type === 'text' ? undefined : 'font-mono'}>
+                          {field.type === 'sensitive' ? '••••••••' : field.value}
+                        </span>
+                      ) : (
+                        <span className="text-subtle">—</span>
+                      )}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            )}
+          </div>
+        </div>
+
+        {/* Fields */}
+        <SectionHeading
+          title="Fields"
+          action={
+            <Button variant="secondary" size="sm" onClick={() => setAddingField(true)}>
+              <Plus size={14} aria-hidden /> Add field
+            </Button>
+          }
+        />
+        {addingField && <AddFieldForm personId={detail.id} onDone={() => setAddingField(false)} />}
+        <div>
+          {detail.fields.length === 0 && !addingField ? (
+            <p className="px-4 py-6 text-sm text-muted">No fields yet.</p>
+          ) : (
+            [...pinned, ...unpinned].map((field) => (
+              <FieldRow key={field.id} field={field} personId={detail.id} />
+            ))
+          )}
+        </div>
+
+        {/* Documents */}
+        <SectionHeading
+          title="Documents"
+          action={
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => documentInput.current?.click()}
+              disabled={uploadDocument.isPending}
+            >
+              <Upload size={14} aria-hidden />
+              {uploadDocument.isPending ? 'Uploading…' : 'Upload'}
+            </Button>
+          }
+        />
+        <input
+          ref={documentInput}
+          type="file"
+          accept=".pdf,.png,.jpg,.jpeg,.webp"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) uploadDocument.mutate(file)
+            event.target.value = ''
+          }}
+        />
+        {uploadError && (
+          <p role="alert" className="px-4 py-2 text-sm text-danger">
+            {uploadError}
+          </p>
+        )}
+        {detail.documents.length === 0 ? (
+          <p className="px-4 py-6 text-sm text-muted">No documents yet.</p>
+        ) : (
+          detail.documents.map((document) => (
+            <DocumentRow key={document.id} document={document} personId={detail.id} />
+          ))
+        )}
+      </div>
+
+      <div className="flex justify-end">
+        <Button variant="danger" size="sm" onClick={() => setConfirmingDelete(true)}>
+          <Trash2 size={14} aria-hidden /> Delete person
+        </Button>
+      </div>
+
+      {renaming && (
+        <Dialog title="Rename person" onClose={() => setRenaming(false)}>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              rename.mutate()
+            }}
+            className="space-y-4"
+          >
+            <Input
+              id="rename"
+              label="Full name"
+              value={newName}
+              onChange={(event) => setNewName(event.target.value)}
+              autoFocus
+              required
+            />
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setRenaming(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={rename.isPending}>
+                Save
+              </Button>
+            </div>
+          </form>
+        </Dialog>
+      )}
+
+      {confirmingDelete && (
+        <Dialog title="Delete person?" onClose={() => setConfirmingDelete(false)}>
+          <p className="mb-4 text-sm text-muted">
+            “{detail.full_name}” and all of their fields and documents will be permanently deleted.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setConfirmingDelete(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={() => removePerson.mutate()}
+              disabled={removePerson.isPending}
+            >
+              Delete
+            </Button>
+          </div>
+        </Dialog>
+      )}
+    </div>
+  )
+}

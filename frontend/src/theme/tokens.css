@@ -1,0 +1,111 @@
+/* Family Vault design tokens — see docs/Design System.md.
+   Semantic CSS variables switch with the .dark class; Tailwind utilities
+   reference them via @theme inline, so `bg-surface text-ink` etc. adapt. */
+
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  /* Light — warm archival paper */
+  --bg: #f6f4ef;
+  --surface: #ffffff;
+  --surface-subtle: #fbfaf7;
+  --surface-hover: #eeeae1;
+  --border: #e7e2d9;
+  --border-strong: #d6cfc2;
+  --ink: #1c1917;
+  --muted: #78716c;
+  --subtle: #a8a29e;
+  --accent: #0f766e;
+  --accent-hover: #0e6b63;
+  --accent-active: #0b5a54;
+  --accent-fill: #d7eae7;
+  --accent-on: #ffffff;
+  --seal: #b45309;
+  --seal-fill: #f7ecd9;
+  --danger: #b91c1c;
+  --success: #15803d;
+  --focus-ring: color-mix(in srgb, #0f766e 45%, transparent);
+  --scrim: rgba(28, 25, 23, 0.45);
+}
+
+.dark {
+  --bg: #1a1815;
+  --surface: #232019;
+  --surface-subtle: #1f1c17;
+  --surface-hover: #2b2721;
+  --border: #38332b;
+  --border-strong: #4a443a;
+  --ink: #f5f1e8;
+  --muted: #a8a096;
+  --subtle: #78716c;
+  --accent: #5eead4;
+  --accent-hover: #7df0de;
+  --accent-active: #3fd8c4;
+  --accent-fill: #123c39;
+  --accent-on: #0a2622;
+  --seal: #f59e0b;
+  --seal-fill: #3a2e15;
+  --danger: #f87171;
+  --success: #4ade80;
+  --focus-ring: color-mix(in srgb, #5eead4 55%, transparent);
+  --scrim: rgba(0, 0, 0, 0.6);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-subtle: var(--surface-subtle);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-subtle: var(--subtle);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-on: var(--accent-on);
+  --color-seal: var(--seal);
+  --color-seal-fill: var(--seal-fill);
+  --color-danger: var(--danger);
+  --color-success: var(--success);
+
+  /* Self-hosted font stacks (system fallbacks until woff2 files land, NFR-2). */
+  --font-display: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --font-sans: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'IBM Plex Mono', 'SF Mono', Menlo, monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --shadow-card: 0 2px 8px rgba(28, 25, 23, 0.08);
+  --shadow-raised: 0 8px 24px rgba(28, 25, 23, 0.1);
+}
+
+@layer base {
+  body {
+    background-color: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus-ring);
+    outline-offset: 1px;
+  }
+}
+
+@utility label-caps {
+  /* "label" type style from the design system: small caps-feel metadata */
+  font-size: 12.5px;
+  line-height: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
