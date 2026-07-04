@@ -10,7 +10,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react'
-import { type FormEvent, useRef, useState } from 'react'
+import { type DragEvent, type FormEvent, useEffect, useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { FieldRow, ValueInput } from '../components/FieldRow'
@@ -235,6 +235,48 @@ export function PersonPage() {
     onError: (error) => setUploadError(error.message),
   })
 
+  const [orderedFields, setOrderedFields] = useState<FieldOut[]>([])
+  const [dragState, setDragState] = useState<{ draggedId: number | null; overId: number | null }>({
+    draggedId: null,
+    overId: null,
+  })
+
+  useEffect(() => {
+    if (person.data) {
+      setOrderedFields([
+        ...person.data.fields.filter((field) => field.is_pinned),
+        ...person.data.fields.filter((field) => !field.is_pinned),
+      ])
+    }
+  }, [person.data])
+
+  const reorder = useMutation({
+    mutationFn: (items: { id: number; position: number }[]) =>
+      api<FieldOut[]>(`/api/people/${personId}/fields/reorder`, { method: 'POST', body: { items } }),
+    onSuccess: invalidate,
+  })
+
+  // Drag/keyboard reorder is confined to each field's pinned/unpinned group — the
+  // list always displays pinned fields first regardless of stored position, so a
+  // move that crossed the boundary would silently revert once the list refetches.
+  const moveField = (fromIndex: number, toIndex: number) => {
+    if (fromIndex === toIndex || toIndex < 0 || toIndex >= orderedFields.length) return
+    const pinnedCount = orderedFields.filter((field) => field.is_pinned).length
+    const isPinnedIndex = (index: number) => index < pinnedCount
+    if (isPinnedIndex(fromIndex) !== isPinnedIndex(toIndex)) return
+    const next = [...orderedFields]
+    const [moved] = next.splice(fromIndex, 1)
+    next.splice(toIndex, 0, moved)
+    setOrderedFields(next)
+    reorder.mutate(next.map((field, index) => ({ id: field.id, position: index })))
+  }
+
+  const onRowDrop = (dropIndex: number) => {
+    const fromIndex = orderedFields.findIndex((field) => field.id === dragState.draggedId)
+    if (fromIndex !== -1) moveField(fromIndex, dropIndex)
+    setDragState({ draggedId: null, overId: null })
+  }
+
   if (person.isPending) return <Spinner />
   if (person.error instanceof ApiError && person.error.status === 404) {
     return <p className="text-muted">This person no longer exists.</p>
@@ -243,7 +285,6 @@ export function PersonPage() {
 
   const detail = person.data
   const pinned = detail.fields.filter((field) => field.is_pinned)
-  const unpinned = detail.fields.filter((field) => !field.is_pinned)
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -329,11 +370,30 @@ export function PersonPage() {
         />
         {addingField && <AddFieldForm personId={detail.id} onDone={() => setAddingField(false)} />}
         <div>
-          {detail.fields.length === 0 && !addingField ? (
+          {orderedFields.length === 0 && !addingField ? (
             <p className="px-4 py-6 text-sm text-muted">No fields yet.</p>
           ) : (
-            [...pinned, ...unpinned].map((field) => (
-              <FieldRow key={field.id} field={field} personId={detail.id} />
+            orderedFields.map((field, index) => (
+              <FieldRow
+                key={field.id}
+                field={field}
+                personId={detail.id}
+                position={index + 1}
+                count={orderedFields.length}
+                onMoveUp={() => moveField(index, index - 1)}
+                onMoveDown={() => moveField(index, index + 1)}
+                onDragHandleStart={() => setDragState({ draggedId: field.id, overId: null })}
+                onDragHandleEnd={() => setDragState({ draggedId: null, overId: null })}
+                onRowDragOver={(event: DragEvent) => {
+                  event.preventDefault()
+                  if (dragState.draggedId !== null) {
+                    setDragState((current) => ({ ...current, overId: field.id }))
+                  }
+                }}
+                onRowDrop={() => onRowDrop(index)}
+                isDragSource={dragState.draggedId === field.id}
+                isDropTarget={dragState.overId === field.id && dragState.draggedId !== field.id}
+              />
             ))
           )}
         </div>

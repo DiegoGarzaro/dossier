@@ -19,7 +19,6 @@ even if fixed immediately — it gets a row here. Never fix silently or rely on 
 
 | ID | Type | Sev | Area | Finding & intended action | Status |
 |---|---|---|---|---|---|
-| G-01 | Gap | 🟠 | Fields UI | Drag-and-drop reorder not built (reorder API + test exist). Build DnD in the ID-card field list. | open |
 | G-02 | Gap | 🟡 | Documents UI | Document rename not surfaced (PATCH endpoint exists). Add inline rename. | open |
 | G-04 | Gap | 🟠 | Testing | No frontend tests. Stand up Vitest + Testing Library, then cover ID-card render, inline edit, pin, sensitive reveal, theme switch. | open |
 | G-05 | Gap | 🟡 | Design/privacy | Fonts fall back to system stacks; ship self-hosted woff2 (Source Serif 4 / Inter / IBM Plex Mono) for NFR-2 no-CDN + intended type. | open |
@@ -30,6 +29,7 @@ even if fixed immediately — it gets a row here. Never fix silently or rely on 
 
 | ID | Type | Sev | Area | Finding & intended action | Status |
 |---|---|---|---|---|---|
+| G-01 | Gap | 🟠 | Fields UI | Drag-and-drop reorder not built (reorder API + test existed). Built: native HTML5 DnD via a grip handle (`⇅`, matches Design System §5.3) on each `FieldRow`, plus ArrowUp/ArrowDown keyboard support on the same handle for a11y (NFR-9 — native DnD alone isn't keyboard-operable). Reordering is confined to each field's pinned/unpinned group, since the list always displays pinned fields first regardless of stored `position` — a cross-group move would silently revert once the list refetched. Verified live via Playwright: drag persists across reload, keyboard move works, cross-group drop is correctly rejected. | done (2026-07-04) |
 | G-17 | Bug | 🔴 | Docker build | No `.dockerignore` existed: `COPY backend/ ./` and `COPY frontend/ ./` copied the host's own `backend/.venv` and `frontend/node_modules` over the image's freshly built ones (no correcting copy after, unlike `app/static`). Container crash-looped: `.venv` pointed at the host's pyenv interpreter, so `uv run` discarded it, recreated an empty one, and `uvicorn` was never installed into it. Fixed: added root `.dockerignore` excluding `.venv/`, `node_modules/`, caches, `data/`. | done (2026-07-04) |
 | G-06 | Gap | 🟠 | Deploy | Docker image never built/run end-to-end. Built + ran via `docker compose up`; verified health check, SPA serving, first-run admin setup via API, data written to `./data`, session + data surviving both `restart` and full `down`/`up` recreation, and backup/restore round-trip (stop → tar → wipe `data/` → untar → start → still authenticated). Also cross-built for `linux/amd64` (native arch is arm64) confirming NFR-1 multi-arch. | done (2026-07-04) |
 | G-08 | Gap | 🟠 | Repo | Project was not under version control. Confirmed: `git init` done, `origin` remote set to github.com/DiegoGarzaro/dossier, initial commit landed, `uv.lock` + `package-lock.json` tracked. | done (2026-07-04) |

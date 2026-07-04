@@ -1,8 +1,8 @@
 /** A single field row on the ID-card: display, inline edit, pin, remove (Epic C). */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Check, Eye, EyeOff, Pencil, Pin, Trash2, X } from 'lucide-react'
-import { type FormEvent, useState } from 'react'
+import { ArrowUpDown, Check, Eye, EyeOff, Pencil, Pin, Trash2, X } from 'lucide-react'
+import { type DragEvent, type FormEvent, type KeyboardEvent, useState } from 'react'
 
 import { api } from '../lib/api'
 import type { FieldOut, FieldType } from '../lib/types'
@@ -80,7 +80,35 @@ export function ValueInput({
   )
 }
 
-export function FieldRow({ field, personId }: { field: FieldOut; personId: number }) {
+interface FieldRowProps {
+  field: FieldOut
+  personId: number
+  position: number
+  count: number
+  onMoveUp: () => void
+  onMoveDown: () => void
+  onDragHandleStart: () => void
+  onDragHandleEnd: () => void
+  onRowDragOver: (event: DragEvent) => void
+  onRowDrop: () => void
+  isDragSource: boolean
+  isDropTarget: boolean
+}
+
+export function FieldRow({
+  field,
+  personId,
+  position,
+  count,
+  onMoveUp,
+  onMoveDown,
+  onDragHandleStart,
+  onDragHandleEnd,
+  onRowDragOver,
+  onRowDrop,
+  isDragSource,
+  isDropTarget,
+}: FieldRowProps) {
   const [editing, setEditing] = useState(false)
   const [label, setLabel] = useState(field.label)
   const [value, setValue] = useState(field.value ?? '')
@@ -110,9 +138,32 @@ export function FieldRow({ field, personId }: { field: FieldOut; personId: numbe
     update.mutate({ label, value: value === '' ? null : value })
   }
 
+  const onHandleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'ArrowUp') {
+      event.preventDefault()
+      onMoveUp()
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      onMoveDown()
+    }
+  }
+
+  const rowDragProps = {
+    onDragOver: onRowDragOver,
+    onDrop: (event: DragEvent) => {
+      event.preventDefault()
+      onRowDrop()
+    },
+  }
+  const dropTargetClass = isDropTarget ? 'border-t-2 border-accent' : 'border-t-2 border-transparent'
+
   if (editing) {
     return (
-      <form onSubmit={onSave} className="grid grid-cols-1 items-start gap-2 px-4 py-2 sm:grid-cols-[minmax(160px,1fr)_2fr_auto]">
+      <form
+        onSubmit={onSave}
+        {...rowDragProps}
+        className={`grid grid-cols-1 items-start gap-2 px-4 py-2 sm:grid-cols-[minmax(160px,1fr)_2fr_auto] ${dropTargetClass}`}
+      >
         <input
           aria-label="Field label"
           className="h-9 w-full rounded-sm border border-border bg-surface px-3 text-sm focus:border-accent"
@@ -152,12 +203,26 @@ export function FieldRow({ field, personId }: { field: FieldOut; personId: numbe
   }
 
   return (
-    <div className="group grid grid-cols-1 items-baseline gap-x-2 px-4 py-2.5 odd:bg-surface-subtle sm:grid-cols-[minmax(160px,1fr)_2fr_auto]">
+    <div
+      {...rowDragProps}
+      className={`group grid grid-cols-1 items-baseline gap-x-2 px-4 py-2.5 odd:bg-surface-subtle sm:grid-cols-[minmax(160px,1fr)_2fr_auto] ${dropTargetClass} ${isDragSource ? 'opacity-40' : ''}`}
+    >
       <span className="label-caps">{field.label}</span>
       <span className="text-[15px]">
         <FieldValue field={field} />
       </span>
       <div className="flex gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
+        <button
+          type="button"
+          draggable
+          onDragStart={() => onDragHandleStart()}
+          onDragEnd={() => onDragHandleEnd()}
+          onKeyDown={onHandleKeyDown}
+          aria-label={`Reorder ${field.label}, position ${position} of ${count}. Use arrow keys to move.`}
+          className="cursor-grab rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink active:cursor-grabbing"
+        >
+          <ArrowUpDown size={15} />
+        </button>
         <button
           type="button"
           aria-label={field.is_pinned ? 'Unpin field' : 'Pin field to header'}

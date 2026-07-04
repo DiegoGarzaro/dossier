@@ -58,7 +58,8 @@
 - [x] Reorder API + bulk position update (FR-15) — ✓ verified
 - [x] Pinned fields render in card header with amber rule (FR-16)
 - [x] Sensitive values masked by default, reveal-on-demand (SEC-7)
-- [ ] **Drag-and-drop reorder UI** (API + test exist; UI not built) — Design System §5.3
+- [x] Drag-and-drop reorder UI — ✓ verified (grip handle + keyboard arrow-key alternative,
+      confined to pinned/unpinned groups) — Design System §5.3
 - [ ] Inline value edit exists; confirm keyboard/a11y flows
 
 ### Epic D — Documents
@@ -93,7 +94,7 @@
 ## MVP definition of done (Acceptance Criteria §13)
 
 - [x] 1. Fresh `docker compose up` → running app + first-run admin setup — ✓ verified
-- [~] 2. Create person, add/edit/remove/reorder all 6 field types, pin, card renders (reorder = API only)
+- [x] 2. Create person, add/edit/remove/reorder all 6 field types, pin, card renders — ✓ verified
 - [x] 3. Upload/download/delete a document with metadata shown — ✓ verified (API)
 - [x] 4. Search people by name — ✓ verified
 - [x] 5. Data survives container recreation; backup/restore works as documented — ✓ verified
