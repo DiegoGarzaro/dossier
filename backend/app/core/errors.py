@@ -39,3 +39,9 @@ class PayloadTooLargeError(AppError):
     """An upload exceeded the configured size limit (FR-20)."""
 
     status = 413
+
+
+class RateLimitedError(AppError):
+    """Too many failed attempts; retry after a cooldown (SEC hardening, G-07)."""
+
+    status = 429

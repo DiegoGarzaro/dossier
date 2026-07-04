@@ -23,7 +23,7 @@
 | Field-value search, JSON export (Phase 3) | ⬜ not started |
 | Multi-user, i18n, OCR, audit (Phase 4) | ⬜ not started |
 | Test coverage | 🟡 backend covered; no frontend tests |
-| Hardening (rate-limit, proxy flag, fonts) | 🟡 gaps listed below |
+| Hardening (rate-limit, proxy flag, fonts) | 🟡 rate-limit + proxy flag done; fonts still gap (G-05) |
 
 ---
 
@@ -37,7 +37,8 @@
 - [x] Server-side sessions, revocable, sliding 14-day expiry (FR-4)
 - [x] Auth guard on all data routes → 401 (FR-1 / SEC-1) — ✓ verified
 - [x] CSRF double-submit on unsafe methods (SEC-3) — ✓ verified
-- [ ] Login rate-limiting / lockout on repeated failures (hardening, not in FR but recommended)
+- [x] Login rate-limiting / lockout on repeated failures — ✓ verified (locks after
+      `DOSSIER_LOGIN_MAX_ATTEMPTS` failures for `DOSSIER_LOGIN_LOCKOUT_MINUTES`)
 - [ ] Frontend: change-password UI wired to `/api/auth/password` — **DONE in SettingsPage**, needs manual verification
 
 ### Epic B — People
@@ -146,8 +147,8 @@
 
 ### Security hardening
 - [x] Argon2id, CSRF, HTTP-only SameSite cookies, upload allow-list, nosniff
-- [ ] **Consume `DOSSIER_TRUST_PROXY`** — currently declared but unused; wire forwarded-header trust + `Secure` cookies when set (SEC-8)
-- [ ] Login rate-limiting (see Epic A)
+- [x] Consume `DOSSIER_TRUST_PROXY` — wired in `auth.py`/`middleware.py` (G-03, SEC-8)
+- [x] Login rate-limiting (see Epic A, G-07)
 - [ ] Security review pass before external exposure
 - [ ] Document Caddy/reverse-proxy HTTPS example (Architecture §9 / SEC-8)
 
