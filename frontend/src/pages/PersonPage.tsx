@@ -329,10 +329,13 @@ export function PersonPage() {
   // Drag/keyboard reorder is confined to each field's pinned/unpinned group — the
   // list always displays pinned fields first regardless of stored position, so a
   // move that crossed the boundary would silently revert once the list refetches.
+  const isPinnedIndex = (index: number) => {
+    const pinnedCount = orderedFields.filter((field) => field.is_pinned).length
+    return index < pinnedCount
+  }
+
   const moveField = (fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex || toIndex < 0 || toIndex >= orderedFields.length) return
-    const pinnedCount = orderedFields.filter((field) => field.is_pinned).length
-    const isPinnedIndex = (index: number) => index < pinnedCount
     if (isPinnedIndex(fromIndex) !== isPinnedIndex(toIndex)) return
     const next = [...orderedFields]
     const [moved] = next.splice(fromIndex, 1)
@@ -455,10 +458,17 @@ export function PersonPage() {
                 onDragHandleStart={() => setDragState({ draggedId: field.id, overId: null })}
                 onDragHandleEnd={() => setDragState({ draggedId: null, overId: null })}
                 onRowDragOver={(event: DragEvent) => {
-                  event.preventDefault()
-                  if (dragState.draggedId !== null) {
-                    setDragState((current) => ({ ...current, overId: field.id }))
+                  if (dragState.draggedId === null) return
+                  const fromIndex = orderedFields.findIndex((f) => f.id === dragState.draggedId)
+                  if (fromIndex === -1 || isPinnedIndex(fromIndex) !== isPinnedIndex(index)) {
+                    // Different pinned/unpinned group: refuse the drop outright (no
+                    // preventDefault) so the cursor shows "not allowed" instead of
+                    // silently doing nothing once dropped.
+                    event.dataTransfer.dropEffect = 'none'
+                    return
                   }
+                  event.preventDefault()
+                  setDragState((current) => ({ ...current, overId: field.id }))
                 }}
                 onRowDrop={() => onRowDrop(index)}
                 isDragSource={dragState.draggedId === field.id}
