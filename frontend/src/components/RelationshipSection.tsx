@@ -1,7 +1,7 @@
 /** Relationships section on the ID-card: grouped chips, add/remove (Epic E, Design System §5.5). */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, X } from 'lucide-react'
+import { Network, Plus, X } from 'lucide-react'
 import { type FormEvent, useDeferredValue, useState } from 'react'
 import { Link } from 'react-router-dom'
 
@@ -211,9 +211,18 @@ export function RelationshipSection({
       <SectionHeading
         title="Relationships"
         action={
-          <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
-            <Plus size={14} aria-hidden /> Add relationship
-          </Button>
+          <div className="flex gap-2">
+            {relationships.length > 0 && (
+              <Link to={`/people/${personId}/tree`}>
+                <Button variant="ghost" size="sm">
+                  <Network size={14} aria-hidden /> View tree
+                </Button>
+              </Link>
+            )}
+            <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
+              <Plus size={14} aria-hidden /> Add relationship
+            </Button>
+          </div>
         }
       />
       {relationships.length === 0 ? (

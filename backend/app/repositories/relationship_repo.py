@@ -33,6 +33,18 @@ class RelationshipRepository:
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
+    async def list_all(self) -> list[Relationship]:
+        """List every relationship with both sides' Person loaded (Phase 2b).
+
+        The whole table is fetched in one query; the tree service walks the
+        graph in memory, which stays cheap at family-vault scale.
+
+        Returns:
+            list[Relationship]: All relationship rows.
+        """
+        result = await self._session.execute(select(Relationship))
+        return list(result.scalars().all())
+
     async def get(self, relationship_id: int) -> Relationship | None:
         """Fetch a relationship by id.
 

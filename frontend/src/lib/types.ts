@@ -32,6 +32,25 @@ export interface RelationshipOut {
   label: string
 }
 
+export interface TreeNode {
+  id: number
+  full_name: string
+  generation: number
+}
+
+export interface TreeEdge {
+  source_id: number
+  target_id: number
+  type: RelationshipType
+  label: string | null
+}
+
+export interface TreeOut {
+  center_id: number
+  nodes: TreeNode[]
+  edges: TreeEdge[]
+}
+
 export interface PersonSummary {
   id: number
   full_name: string

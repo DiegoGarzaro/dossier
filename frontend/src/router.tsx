@@ -13,6 +13,7 @@ import { Login } from './pages/Login'
 import { PeopleIndex } from './pages/PeopleIndex'
 import { PersonPage } from './pages/PersonPage'
 import { SettingsPage } from './pages/SettingsPage'
+import { TreePage } from './pages/TreePage'
 
 export function useAuthStatus() {
   return useQuery({
@@ -48,6 +49,7 @@ export const router = createBrowserRouter([
     children: [
       { path: '/', element: <PeopleIndex /> },
       { path: '/people/:id', element: <PersonPage /> },
+      { path: '/people/:id/tree', element: <TreePage /> },
       { path: '/settings', element: <SettingsPage /> },
     ],
   },

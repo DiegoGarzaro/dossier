@@ -16,11 +16,11 @@
 
 | Area | State |
 |---|---|
-| MVP backend (Epics A–D, search, backup) | ✅ implemented & tested (26/26 backend tests, ruff clean) |
+| MVP backend (Epics A–D, search, backup) | ✅ implemented & tested (31/31 backend tests, ruff clean) |
 | MVP frontend (all screens) | ✅ implemented, type-checks + builds |
 | Docker packaging | ✅ built, run, and verified end-to-end (arm64 + amd64) |
 | Relationships (Epic E, Phase 2) | ✅ implemented end-to-end, backend + frontend, ✓ verified |
-| People relationship tree view (Phase 2b, new idea) | ⬜ not started |
+| People relationship tree view (Phase 2b, new idea) | ✅ implemented end-to-end, ✓ verified |
 | Field-value search, JSON export, encrypted backup (Phase 3) | ⬜ not started; vCard export ✅ done |
 | Multi-user, i18n, OCR, audit (Phase 4) | ⬜ not started |
 | Test coverage | 🟡 backend covered; no frontend tests |
@@ -125,13 +125,18 @@
 > chart — it visualizes every relationship type (spouse, parent/child, sibling, custom) as one
 > connected graph centered on a person.
 
-- [ ] Decide traversal scope (direct connections only vs. full connected graph) and depth limit
-- [ ] Backend: endpoint that walks a person's relationship graph into a renderable graph shape
-- [ ] Frontend: new read-only route (e.g. `/people/{id}/tree`) rendering the relationship graph
-- [ ] Handle non-hierarchical cases gracefully (remarriage, multiple partners, sibling loops) — the
-      relationship graph isn't strictly a tree, so the layout needs to represent spouse/sibling
-      links (peers) distinctly from parent/child links (generations)
-- [ ] Nodes link back to each person's ID-card
+- [x] Decide traversal scope — full connected component via BFS, clamped to ±3 generations and
+      100 nodes (generous for a family vault, bounded for safety)
+- [x] Backend: `GET /api/people/{id}/tree` walks the graph into nodes (with relative generation)
+      + edges — ✓ verified (5 new tests)
+- [x] Frontend: read-only `/people/{id}/tree` route — generation rows with ledger-margin labels
+      (Grandparents / Parents / This generation / …), SVG connectors drawn from measured node
+      positions, amber seal ring on the center person — ✓ verified live
+- [x] Non-hierarchical cases: spouse/sibling/custom stay in the same generation row (solid tie /
+      dashed / dotted lines per kind, legend shown); parent links draw generational elbows; on
+      conflicting paths BFS first-assignment wins (it's a view, not a validator)
+- [x] Nodes link back to each person's ID-card — ✓ verified (entry point: "View tree" in the
+      Relationships section)
 
 ---
 
@@ -168,7 +173,7 @@
 ## Cross-cutting: quality, security, ops (do alongside phases)
 
 ### Testing
-- [x] Backend: auth, people, fields, documents, relationships, vcard flows (26 tests) — ✓ passing
+- [x] Backend: auth, people, fields, documents, relationships, vcard, tree flows (31 tests) — ✓ passing
 - [ ] Backend: password-change flow, session expiry, photo upload validation
 - [ ] Frontend: Vitest + Testing Library — ID-card render, inline edit, pin, sensitive reveal, theme switch
 - [ ] End-to-end acceptance checklist mapped to §13

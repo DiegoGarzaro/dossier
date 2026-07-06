@@ -7,7 +7,7 @@ from app.deps import CurrentUser, DbSession
 from app.models import Person
 from app.schemas.field import FieldOut
 from app.schemas.person import PersonCreate, PersonDetail, PersonSummary, PersonUpdate
-from app.schemas.relationship import RelationshipOut
+from app.schemas.relationship import RelationshipOut, TreeOut
 from app.services.people_service import PeopleService
 from app.services.relationship_service import RelationshipService
 from app.services.vcard_service import VCardService
@@ -100,6 +100,12 @@ async def get_photo(person_id: int, _: CurrentUser, db: DbSession) -> FileRespon
     """Serve the profile photo inline with its verified image content-type."""
     path, mime = await PeopleService(db).get_photo_path(person_id)
     return FileResponse(path, media_type=mime, headers={"Cache-Control": "private, no-store"})
+
+
+@router.get("/{person_id}/tree", response_model=TreeOut)
+async def get_tree(person_id: int, _: CurrentUser, db: DbSession) -> TreeOut:
+    """Fetch a person's connected relationship graph for the tree view (Phase 2b)."""
+    return await RelationshipService(db).tree(person_id)
 
 
 @router.get("/{person_id}/vcard")
