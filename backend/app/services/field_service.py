@@ -96,12 +96,18 @@ class FieldService:
 
         Raises:
             NotFoundError: If the field does not exist.
-            InvalidInputError: If the resulting value fails type validation.
+            InvalidInputError: If the resulting value fails type validation, or a
+                system field's label or type is being changed (FR-17).
         """
         field = await self._fields.get(field_id)
         if field is None:
             raise NotFoundError("Field not found")
         updates = data.model_dump(exclude_unset=True)
+        if field.is_system:
+            if updates.get("label", field.label) != field.label:
+                raise InvalidInputError("Built-in fields can't be renamed")
+            if updates.get("type", field.type) != field.type:
+                raise InvalidInputError("Built-in fields can't change type")
         new_type = updates.get("type", field.type)
         new_value = updates.get("value", field.value)
         validate_value(new_type, new_value)
@@ -120,10 +126,13 @@ class FieldService:
 
         Raises:
             NotFoundError: If the field does not exist.
+            InvalidInputError: If the field is a built-in system field (FR-17).
         """
         field = await self._fields.get(field_id)
         if field is None:
             raise NotFoundError("Field not found")
+        if field.is_system:
+            raise InvalidInputError("Built-in fields can't be removed")
         await self._fields.delete(field)
 
     async def reorder(self, person_id: int, data: ReorderRequest) -> list[PersonField]:

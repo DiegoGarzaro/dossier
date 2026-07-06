@@ -19,6 +19,7 @@ import { FieldRow, ValueInput } from '../components/FieldRow'
 import { Avatar, Button, Dialog, Input, Spinner } from '../components/ui'
 import { ApiError, api } from '../lib/api'
 import type { DocumentOut, FieldOut, FieldType, PersonDetail } from '../lib/types'
+import { useFlip } from '../lib/useFlip'
 
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: 'text', label: 'Text' },
@@ -310,12 +311,15 @@ export function PersonPage() {
     draggedId: null,
     overId: null,
   })
+  const [moveAnnouncement, setMoveAnnouncement] = useState('')
+  const registerFlip = useFlip()
 
   useEffect(() => {
     if (person.data) {
       setOrderedFields([
-        ...person.data.fields.filter((field) => field.is_pinned),
-        ...person.data.fields.filter((field) => !field.is_pinned),
+        ...person.data.fields.filter((field) => field.is_system),
+        ...person.data.fields.filter((field) => !field.is_system && field.is_pinned),
+        ...person.data.fields.filter((field) => !field.is_system && !field.is_pinned),
       ])
     }
   }, [person.data])
@@ -324,23 +328,28 @@ export function PersonPage() {
     mutationFn: (items: { id: number; position: number }[]) =>
       api<FieldOut[]>(`/api/people/${personId}/fields/reorder`, { method: 'POST', body: { items } }),
     onSuccess: invalidate,
+    // Revert the optimistic local order if the server rejected the move.
+    onError: invalidate,
   })
 
-  // Drag/keyboard reorder is confined to each field's pinned/unpinned group — the
-  // list always displays pinned fields first regardless of stored position, so a
-  // move that crossed the boundary would silently revert once the list refetches.
-  const isPinnedIndex = (index: number) => {
-    const pinnedCount = orderedFields.filter((field) => field.is_pinned).length
-    return index < pinnedCount
+  // Drag/keyboard reorder is confined to each field's group — built-in system
+  // fields sit first and never move; pinned then unpinned fields follow, each
+  // displayed group-first regardless of stored position, so a move that crossed
+  // a boundary would silently revert once the list refetches.
+  const groupOf = (index: number): 'system' | 'pinned' | 'unpinned' => {
+    const field = orderedFields[index]
+    if (field.is_system) return 'system'
+    return field.is_pinned ? 'pinned' : 'unpinned'
   }
 
   const moveField = (fromIndex: number, toIndex: number) => {
     if (fromIndex === toIndex || toIndex < 0 || toIndex >= orderedFields.length) return
-    if (isPinnedIndex(fromIndex) !== isPinnedIndex(toIndex)) return
+    if (groupOf(fromIndex) === 'system' || groupOf(fromIndex) !== groupOf(toIndex)) return
     const next = [...orderedFields]
     const [moved] = next.splice(fromIndex, 1)
     next.splice(toIndex, 0, moved)
     setOrderedFields(next)
+    setMoveAnnouncement(`${moved.label}, position ${toIndex + 1} of ${next.length}`)
     reorder.mutate(next.map((field, index) => ({ id: field.id, position: index })))
   }
 
@@ -442,17 +451,23 @@ export function PersonPage() {
           }
         />
         {addingField && <AddFieldForm personId={detail.id} onDone={() => setAddingField(false)} />}
+        <div aria-live="polite" className="sr-only">
+          {moveAnnouncement}
+        </div>
         <div>
           {orderedFields.length === 0 && !addingField ? (
             <p className="px-4 py-6 text-sm text-muted">No fields yet.</p>
           ) : (
-            orderedFields.map((field, index) => (
+            orderedFields.map((field, index) => {
+              const draggedIndex = orderedFields.findIndex((f) => f.id === dragState.draggedId)
+              return (
               <FieldRow
                 key={field.id}
                 field={field}
                 personId={detail.id}
                 position={index + 1}
                 count={orderedFields.length}
+                rowRef={registerFlip(field.id)}
                 onMoveUp={() => moveField(index, index - 1)}
                 onMoveDown={() => moveField(index, index + 1)}
                 onDragHandleStart={() => setDragState({ draggedId: field.id, overId: null })}
@@ -460,21 +475,25 @@ export function PersonPage() {
                 onRowDragOver={(event: DragEvent) => {
                   if (dragState.draggedId === null) return
                   const fromIndex = orderedFields.findIndex((f) => f.id === dragState.draggedId)
-                  if (fromIndex === -1 || isPinnedIndex(fromIndex) !== isPinnedIndex(index)) {
-                    // Different pinned/unpinned group: refuse the drop outright (no
-                    // preventDefault) so the cursor shows "not allowed" instead of
-                    // silently doing nothing once dropped.
+                  if (fromIndex === -1 || groupOf(fromIndex) !== groupOf(index)) {
+                    // Different group (system/pinned/unpinned): refuse the drop
+                    // outright (no preventDefault) so the cursor shows "not
+                    // allowed" instead of silently doing nothing once dropped.
                     event.dataTransfer.dropEffect = 'none'
                     return
                   }
                   event.preventDefault()
-                  setDragState((current) => ({ ...current, overId: field.id }))
+                  setDragState((current) =>
+                    current.overId === field.id ? current : { ...current, overId: field.id },
+                  )
                 }}
                 onRowDrop={() => onRowDrop(index)}
                 isDragSource={dragState.draggedId === field.id}
                 isDropTarget={dragState.overId === field.id && dragState.draggedId !== field.id}
+                dropEdge={draggedIndex !== -1 && draggedIndex < index ? 'bottom' : 'top'}
               />
-            ))
+              )
+            })
           )}
         </div>
 

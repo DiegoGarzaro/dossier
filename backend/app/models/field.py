@@ -20,6 +20,8 @@ class PersonField(Base, TimestampMixin):
     value: Mapped[str | None] = mapped_column(Text, default=None)
     type: Mapped[FieldType] = mapped_column(String(20), default=FieldType.text)
     is_pinned: Mapped[bool] = mapped_column(default=False)
+    # Seeded built-in fields (FR-17): value/pin editable, label/type/delete locked.
+    is_system: Mapped[bool] = mapped_column(default=False)
     position: Mapped[int] = mapped_column(default=0)
 
     person: Mapped[Person] = relationship(back_populates="fields")

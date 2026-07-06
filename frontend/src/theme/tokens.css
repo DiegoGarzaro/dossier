@@ -86,6 +86,16 @@
   --shadow-raised: 0 8px 24px rgba(28, 25, 23, 0.1);
 }
 
+/* Drop-target insertion bar grows in from the left (calm motion, §1). */
+@keyframes drop-in {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 @layer base {
   body {
     background-color: var(--bg);

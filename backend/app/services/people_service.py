@@ -55,7 +55,7 @@ class PeopleService:
         """
         person = Person(full_name=data.full_name)
         person.fields = [
-            PersonField(label=label, value=None, is_pinned=True, position=index)
+            PersonField(label=label, value=None, is_pinned=True, is_system=True, position=index)
             for index, label in enumerate(DEFAULT_PINNED_LABELS)
         ]
         return await self._people.add(person)

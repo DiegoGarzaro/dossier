@@ -35,6 +35,7 @@ class FieldOut(BaseModel):
     value: str | None
     type: FieldType
     is_pinned: bool
+    is_system: bool
     position: int
     updated_at: datetime
 

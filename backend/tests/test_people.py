@@ -75,6 +75,40 @@ async def test_field_lifecycle_and_type_validation(authed_client: AsyncClient) -
     await authed_client.delete(f"/api/people/{pid}")
 
 
+async def test_system_fields_are_protected(authed_client: AsyncClient) -> None:
+    """Seeded fields are system fields: value/pin editable, label/type/delete locked (FR-17)."""
+    person = await _create_person(authed_client, "System Fields Person")
+    pid = person["id"]
+    assert all(field["is_system"] for field in person["fields"])
+    system_field = person["fields"][0]
+
+    # Value and pin stay editable.
+    value_edit = await authed_client.patch(
+        f"/api/fields/{system_field['id']}", json={"value": "AB-123456"}
+    )
+    assert value_edit.status_code == 200
+    assert value_edit.json()["value"] == "AB-123456"
+
+    # Label, type, and delete are locked.
+    label_edit = await authed_client.patch(
+        f"/api/fields/{system_field['id']}", json={"label": "Renamed"}
+    )
+    assert label_edit.status_code == 400
+    type_edit = await authed_client.patch(
+        f"/api/fields/{system_field['id']}", json={"type": "number"}
+    )
+    assert type_edit.status_code == 400
+    assert (await authed_client.delete(f"/api/fields/{system_field['id']}")).status_code == 400
+
+    # Custom fields are unaffected.
+    custom = (
+        await authed_client.post(f"/api/people/{pid}/fields", json={"label": "Nickname"})
+    ).json()
+    assert custom["is_system"] is False
+    assert (await authed_client.delete(f"/api/fields/{custom['id']}")).status_code == 204
+    await authed_client.delete(f"/api/people/{pid}")
+
+
 async def test_document_upload_download_delete(authed_client: AsyncClient) -> None:
     """Upload validates content, download is an attachment, delete removes both (Epic D)."""
     person = await _create_person(authed_client, "Documents Person")

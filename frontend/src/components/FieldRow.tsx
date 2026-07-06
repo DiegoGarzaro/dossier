@@ -1,14 +1,45 @@
 /** A single field row on the ID-card: display, inline edit, pin, remove (Epic C). */
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowUpDown, Check, Eye, EyeOff, Pencil, Pin, Trash2, X } from 'lucide-react'
-import { type DragEvent, type FormEvent, type KeyboardEvent, useState } from 'react'
+import {
+  ArrowUpDown,
+  BadgeCheck,
+  Check,
+  Eye,
+  EyeOff,
+  Globe,
+  IdCard,
+  MapPin,
+  Pencil,
+  Pin,
+  Trash2,
+  X,
+} from 'lucide-react'
+import { type DragEvent, type FormEvent, type KeyboardEvent, useRef, useState } from 'react'
 
 import { api } from '../lib/api'
 import type { FieldOut, FieldType } from '../lib/types'
 import { Button } from './ui'
 
 const MONO_TYPES: FieldType[] = ['number', 'date', 'sensitive']
+
+/** Icons for the seeded built-in fields; labels are locked server-side. */
+const SYSTEM_FIELD_ICONS: Record<string, typeof IdCard> = {
+  'Document number': IdCard,
+  Address: MapPin,
+  Nationality: Globe,
+}
+
+function FieldLabel({ field }: { field: FieldOut }) {
+  if (!field.is_system) return <span className="label-caps">{field.label}</span>
+  const Icon = SYSTEM_FIELD_ICONS[field.label] ?? BadgeCheck
+  return (
+    <span className="label-caps flex items-center gap-1.5">
+      <Icon size={14} className="shrink-0 text-subtle" aria-hidden />
+      {field.label}
+    </span>
+  )
+}
 
 export function FieldValue({ field }: { field: FieldOut }) {
   const [revealed, setRevealed] = useState(false)
@@ -93,6 +124,8 @@ interface FieldRowProps {
   onRowDrop: () => void
   isDragSource: boolean
   isDropTarget: boolean
+  dropEdge: 'top' | 'bottom'
+  rowRef: (el: HTMLElement | null) => void
 }
 
 export function FieldRow({
@@ -108,7 +141,10 @@ export function FieldRow({
   onRowDrop,
   isDragSource,
   isDropTarget,
+  dropEdge,
+  rowRef,
 }: FieldRowProps) {
+  const rowEl = useRef<HTMLElement | null>(null)
   const [editing, setEditing] = useState(false)
   const [label, setLabel] = useState(field.label)
   const [value, setValue] = useState(field.value ?? '')
@@ -148,6 +184,11 @@ export function FieldRow({
     }
   }
 
+  const setRowEl = (el: HTMLElement | null) => {
+    rowEl.current = el
+    rowRef(el)
+  }
+
   const rowDragProps = {
     onDragOver: onRowDragOver,
     onDrop: (event: DragEvent) => {
@@ -155,22 +196,38 @@ export function FieldRow({
       onRowDrop()
     },
   }
-  const dropTargetClass = isDropTarget ? 'border-t-2 border-accent' : 'border-t-2 border-transparent'
+
+  // The bar marks the true insertion edge: below the target when dragging
+  // down, above it when dragging up.
+  const dropIndicator = isDropTarget && (
+    <span
+      aria-hidden
+      className={`absolute inset-x-3 h-0.5 origin-left rounded-full bg-accent motion-safe:animate-[drop-in_160ms_ease-out] ${dropEdge === 'bottom' ? 'bottom-0' : 'top-0'}`}
+    />
+  )
 
   if (editing) {
     return (
       <form
+        ref={setRowEl}
         onSubmit={onSave}
         {...rowDragProps}
-        className={`grid grid-cols-1 items-start gap-2 px-4 py-2 sm:grid-cols-[minmax(160px,1fr)_2fr_auto] ${dropTargetClass}`}
+        className="relative grid grid-cols-1 items-start gap-2 px-4 py-2 sm:grid-cols-[minmax(160px,1fr)_2fr_auto]"
       >
-        <input
-          aria-label="Field label"
-          className="h-9 w-full rounded-sm border border-border bg-surface px-3 text-sm focus:border-accent"
-          value={label}
-          onChange={(event) => setLabel(event.target.value)}
-          required
-        />
+        {dropIndicator}
+        {field.is_system ? (
+          <div className="pt-2.5">
+            <FieldLabel field={field} />
+          </div>
+        ) : (
+          <input
+            aria-label="Field label"
+            className="h-9 w-full rounded-sm border border-border bg-surface px-3 text-sm focus:border-accent"
+            value={label}
+            onChange={(event) => setLabel(event.target.value)}
+            required
+          />
+        )}
         <div>
           <ValueInput type={field.type} value={value} onChange={setValue} />
           {error && (
@@ -204,25 +261,42 @@ export function FieldRow({
 
   return (
     <div
+      ref={setRowEl}
       {...rowDragProps}
-      className={`group grid grid-cols-1 items-baseline gap-x-2 px-4 py-2.5 odd:bg-surface-subtle sm:grid-cols-[minmax(160px,1fr)_2fr_auto] ${dropTargetClass} ${isDragSource ? 'opacity-40' : ''}`}
+      className={`group relative grid grid-cols-1 items-baseline gap-x-2 px-4 py-2.5 transition-[background-color,opacity] duration-150 odd:bg-surface-subtle hover:bg-surface-hover sm:grid-cols-[minmax(160px,1fr)_2fr_auto] ${isDragSource ? 'opacity-40' : ''}`}
     >
-      <span className="label-caps">{field.label}</span>
+      {dropIndicator}
+      <FieldLabel field={field} />
       <span className="text-[15px]">
         <FieldValue field={field} />
       </span>
-      <div className="flex gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100">
-        <button
-          type="button"
-          draggable
-          onDragStart={() => onDragHandleStart()}
-          onDragEnd={() => onDragHandleEnd()}
-          onKeyDown={onHandleKeyDown}
-          aria-label={`Reorder ${field.label}, position ${position} of ${count}. Use arrow keys to move.`}
-          className="cursor-grab rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink active:cursor-grabbing"
-        >
-          <ArrowUpDown size={15} />
-        </button>
+      <div className="flex gap-0.5 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
+        {!field.is_system && (
+          <button
+            type="button"
+            draggable
+            onDragStart={(event) => {
+              // Firefox refuses to start a drag unless data is set (G-20).
+              event.dataTransfer.setData('text/plain', field.label)
+              event.dataTransfer.effectAllowed = 'move'
+              if (rowEl.current) {
+                const rect = rowEl.current.getBoundingClientRect()
+                event.dataTransfer.setDragImage(
+                  rowEl.current,
+                  event.clientX - rect.left,
+                  event.clientY - rect.top,
+                )
+              }
+              onDragHandleStart()
+            }}
+            onDragEnd={() => onDragHandleEnd()}
+            onKeyDown={onHandleKeyDown}
+            aria-label={`Reorder ${field.label}, position ${position} of ${count}. Use arrow keys to move.`}
+            className="cursor-grab rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink active:cursor-grabbing"
+          >
+            <ArrowUpDown size={15} />
+          </button>
+        )}
         <button
           type="button"
           aria-label={field.is_pinned ? 'Unpin field' : 'Pin field to header'}
@@ -239,14 +313,16 @@ export function FieldRow({
         >
           <Pencil size={15} />
         </button>
-        <button
-          type="button"
-          aria-label="Remove field"
-          className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-danger"
-          onClick={() => remove.mutate()}
-        >
-          <Trash2 size={15} />
-        </button>
+        {!field.is_system && (
+          <button
+            type="button"
+            aria-label="Remove field"
+            className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-danger"
+            onClick={() => remove.mutate()}
+          >
+            <Trash2 size={15} />
+          </button>
+        )}
       </div>
     </div>
   )

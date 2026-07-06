@@ -8,6 +8,7 @@ export interface FieldOut {
   value: string | null
   type: FieldType
   is_pinned: boolean
+  is_system: boolean
   position: number
   updated_at: string
 }
