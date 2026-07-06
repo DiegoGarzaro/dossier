@@ -31,12 +31,16 @@ const SYSTEM_FIELD_ICONS: Record<string, typeof IdCard> = {
 }
 
 function FieldLabel({ field }: { field: FieldOut }) {
-  if (!field.is_system) return <span className="label-caps">{field.label}</span>
+  // min-w-0 + break-words: long unbreakable labels (emails, codes) must wrap
+  // inside their grid column instead of colliding with the value column.
+  if (!field.is_system) {
+    return <span className="label-caps min-w-0 break-words">{field.label}</span>
+  }
   const Icon = SYSTEM_FIELD_ICONS[field.label] ?? BadgeCheck
   return (
-    <span className="label-caps flex items-center gap-1.5">
+    <span className="label-caps flex min-w-0 items-center gap-1.5">
       <Icon size={14} className="shrink-0 text-subtle" aria-hidden />
-      {field.label}
+      <span className="min-w-0 break-words">{field.label}</span>
     </span>
   )
 }
@@ -267,7 +271,7 @@ export function FieldRow({
     >
       {dropIndicator}
       <FieldLabel field={field} />
-      <span className="text-[15px]">
+      <span className="min-w-0 text-[15px] break-words">
         <FieldValue field={field} />
       </span>
       <div className="flex gap-0.5 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">

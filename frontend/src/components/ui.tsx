@@ -74,6 +74,8 @@ export function Avatar({
     .filter((_, index, parts) => index === 0 || index === parts.length - 1)
     .join('')
     .toUpperCase()
+  // shrink-0: flex rows squeeze items below their explicit width when text
+  // runs long, which left avatars subtly different sizes across cards.
   if (photoUrl) {
     return (
       <img
@@ -81,7 +83,7 @@ export function Avatar({
         alt={name}
         width={size}
         height={size}
-        className="rounded-full border border-border object-cover"
+        className="shrink-0 rounded-full border border-border object-cover"
         style={{ width: size, height: size }}
       />
     )
@@ -89,7 +91,7 @@ export function Avatar({
   return (
     <div
       aria-hidden
-      className="flex items-center justify-center rounded-full bg-accent-fill font-display font-semibold text-accent"
+      className="flex shrink-0 items-center justify-center rounded-full bg-accent-fill font-display font-semibold text-accent"
       style={{ width: size, height: size, fontSize: size * 0.36 }}
     >
       {initials}

@@ -75,6 +75,22 @@ async def test_field_lifecycle_and_type_validation(authed_client: AsyncClient) -
     await authed_client.delete(f"/api/people/{pid}")
 
 
+async def test_sensitive_pinned_values_hidden_from_index(authed_client: AsyncClient) -> None:
+    """Pinned sensitive values never appear in the index-grid preview (SEC-7)."""
+    person = await _create_person(authed_client, "Secret Pinner")
+    created = await authed_client.post(
+        f"/api/people/{person['id']}/fields",
+        json={"label": "PIN code", "value": "9-8-7-6", "type": "sensitive", "is_pinned": True},
+    )
+    assert created.status_code == 201
+
+    listing = (await authed_client.get("/api/people", params={"q": "Secret Pinner"})).json()
+    entry = next(item for item in listing if item["id"] == person["id"])
+    assert all(field["type"] != "sensitive" for field in entry["pinned_fields"])
+    assert "9-8-7-6" not in str(entry)
+    await authed_client.delete(f"/api/people/{person['id']}")
+
+
 async def test_system_fields_are_protected(authed_client: AsyncClient) -> None:
     """Seeded fields are system fields: value/pin editable, label/type/delete locked (FR-17)."""
     person = await _create_person(authed_client, "System Fields Person")

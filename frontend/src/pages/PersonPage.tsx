@@ -416,9 +416,12 @@ export function PersonPage() {
             {pinned.length > 0 && (
               <dl className="mt-4 space-y-2 border-l-2 border-seal pl-3">
                 {pinned.map((field) => (
-                  <div key={field.id} className="grid grid-cols-[minmax(120px,auto)_1fr] gap-x-3">
-                    <dt className="label-caps">{field.label}</dt>
-                    <dd className="text-[15px]">
+                  <div
+                    key={field.id}
+                    className="grid grid-cols-[minmax(120px,240px)_1fr] items-baseline gap-x-3"
+                  >
+                    <dt className="label-caps min-w-0 break-words">{field.label}</dt>
+                    <dd className="min-w-0 text-[15px] break-words">
                       {field.value ? (
                         <span className={field.type === 'text' ? undefined : 'font-mono'}>
                           {field.type === 'sensitive' ? '••••••••' : field.value}

@@ -3,6 +3,7 @@
 from fastapi import APIRouter, UploadFile
 from fastapi.responses import FileResponse, Response
 
+from app.core.enums import FieldType
 from app.deps import CurrentUser, DbSession
 from app.models import Person
 from app.schemas.field import FieldOut
@@ -24,7 +25,13 @@ def _summary(person: Person) -> PersonSummary:
     Returns:
         PersonSummary: The index-grid representation.
     """
-    pinned = [field for field in person.fields if field.is_pinned and field.value]
+    # Sensitive values are masked-by-default in the UI (SEC-7); the grid
+    # preview has no reveal control, so they are excluded entirely.
+    pinned = [
+        field
+        for field in person.fields
+        if field.is_pinned and field.value and field.type != FieldType.sensitive
+    ]
     return PersonSummary(
         id=person.id,
         full_name=person.full_name,
