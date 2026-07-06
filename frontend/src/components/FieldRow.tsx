@@ -297,14 +297,16 @@ export function FieldRow({
             <ArrowUpDown size={15} />
           </button>
         )}
-        <button
-          type="button"
-          aria-label={field.is_pinned ? 'Unpin field' : 'Pin field to header'}
-          className={`rounded p-1.5 hover:bg-surface-hover ${field.is_pinned ? 'text-seal' : 'text-subtle hover:text-ink'}`}
-          onClick={() => update.mutate({ is_pinned: !field.is_pinned })}
-        >
-          <Pin size={15} />
-        </button>
+        {!field.is_system && (
+          <button
+            type="button"
+            aria-label={field.is_pinned ? 'Unpin field' : 'Pin field to header'}
+            className={`rounded p-1.5 hover:bg-surface-hover ${field.is_pinned ? 'text-seal' : 'text-subtle hover:text-ink'}`}
+            onClick={() => update.mutate({ is_pinned: !field.is_pinned })}
+          >
+            <Pin size={15} />
+          </button>
+        )}
         <button
           type="button"
           aria-label="Edit field"

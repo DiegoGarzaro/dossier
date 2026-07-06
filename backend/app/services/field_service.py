@@ -97,7 +97,7 @@ class FieldService:
         Raises:
             NotFoundError: If the field does not exist.
             InvalidInputError: If the resulting value fails type validation, or a
-                system field's label or type is being changed (FR-17).
+                system field's label, type, or pinned state is being changed (FR-17).
         """
         field = await self._fields.get(field_id)
         if field is None:
@@ -108,6 +108,8 @@ class FieldService:
                 raise InvalidInputError("Built-in fields can't be renamed")
             if updates.get("type", field.type) != field.type:
                 raise InvalidInputError("Built-in fields can't change type")
+            if updates.get("is_pinned", field.is_pinned) != field.is_pinned:
+                raise InvalidInputError("Built-in fields are always pinned")
         new_type = updates.get("type", field.type)
         new_value = updates.get("value", field.value)
         validate_value(new_type, new_value)

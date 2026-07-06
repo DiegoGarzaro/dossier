@@ -89,7 +89,7 @@ async def test_system_fields_are_protected(authed_client: AsyncClient) -> None:
     assert value_edit.status_code == 200
     assert value_edit.json()["value"] == "AB-123456"
 
-    # Label, type, and delete are locked.
+    # Label, type, unpinning, and delete are locked.
     label_edit = await authed_client.patch(
         f"/api/fields/{system_field['id']}", json={"label": "Renamed"}
     )
@@ -98,6 +98,10 @@ async def test_system_fields_are_protected(authed_client: AsyncClient) -> None:
         f"/api/fields/{system_field['id']}", json={"type": "number"}
     )
     assert type_edit.status_code == 400
+    unpin = await authed_client.patch(
+        f"/api/fields/{system_field['id']}", json={"is_pinned": False}
+    )
+    assert unpin.status_code == 400
     assert (await authed_client.delete(f"/api/fields/{system_field['id']}")).status_code == 400
 
     # Custom fields are unaffected.
