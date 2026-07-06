@@ -8,7 +8,7 @@
 > the moment you discover a gap/bug/improvement while coding, log it in `ISSUES.md` with a `G-NN` id.
 > Items below may reference those ids (e.g. G-01) for traceability.
 
-**Last assessed:** 2026-07-04
+**Last assessed:** 2026-07-05
 
 ---
 
@@ -20,7 +20,8 @@
 | MVP frontend (all screens) | ✅ implemented, type-checks + builds |
 | Docker packaging | ✅ built, run, and verified end-to-end (arm64 + amd64) |
 | Relationships (Epic E, Phase 2) | ✅ implemented end-to-end, backend + frontend, ✓ verified |
-| Field-value search, JSON export (Phase 3) | ⬜ not started |
+| Genealogy tree view (Phase 2b, new idea) | ⬜ not started |
+| Field-value search, JSON/vCard export, encrypted backup (Phase 3) | ⬜ not started |
 | Multi-user, i18n, OCR, audit (Phase 4) | ⬜ not started |
 | Test coverage | 🟡 backend covered; no frontend tests |
 | Hardening (rate-limit, proxy flag, fonts) | 🟡 rate-limit + proxy flag done; fonts still gap (G-05) |
@@ -117,6 +118,20 @@
 
 ---
 
+## Phase 2b — Genealogy tree view (new idea)
+
+> Not in the original requirements docs — user idea, added 2026-07-05. Builds directly on Epic E's
+> relationship data; view-only, no editing from this screen.
+
+- [ ] Decide traversal scope (direct family only vs. full connected graph) and depth limit
+- [ ] Backend: endpoint that walks a person's relationship graph into a renderable tree/graph shape
+- [ ] Frontend: new read-only route (e.g. `/people/{id}/tree`) rendering the family tree
+- [ ] Handle non-tree cases gracefully (remarriage, multiple partners, sibling loops) — the
+      underlying relationship graph isn't strictly hierarchical
+- [ ] Nodes link back to each person's ID-card
+
+---
+
 ## Phase 3 — Search polish, export/import, settings
 
 - [ ] Field-value search, excluding `sensitive` from plaintext index (FR-27 / F2)
@@ -124,6 +139,14 @@
 - [ ] JSON export of one person / whole dataset (FR-30 / G3)
 - [ ] JSON import / restore-from-export
 - [ ] Settings polish (backup status, data summary)
+- [ ] **vCard export for a person** (new idea, added 2026-07-05, alongside JSON export FR-30):
+      `GET` a `.vcf` file for one person; needs a decision on field-mapping (which custom field
+      labels map to standard vCard properties like TEL/ADR/BDAY) and whether the profile photo
+      embeds as base64
+- [ ] **Encrypted backup/restore** (new idea, added 2026-07-05): in-app export produces a
+      passphrase-encrypted archive; restore decrypts before applying. Goes beyond the current
+      plain-tar procedure (G1/G2, README) — needs a decision on encryption approach (e.g. age/gpg
+      symmetric vs. in-app AES-GCM) and confirmation the passphrase is never persisted server-side
 
 ---
 
