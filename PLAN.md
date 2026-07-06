@@ -16,10 +16,10 @@
 
 | Area | State |
 |---|---|
-| MVP backend (Epics A–D, search, backup) | ✅ implemented & tested (10/10 backend tests, ruff clean) |
+| MVP backend (Epics A–D, search, backup) | ✅ implemented & tested (19/19 backend tests, ruff clean) |
 | MVP frontend (all screens) | ✅ implemented, type-checks + builds |
 | Docker packaging | ✅ built, run, and verified end-to-end (arm64 + amd64) |
-| Relationships (Epic E, Phase 2) | 🟡 data model only; no service/API/UI |
+| Relationships (Epic E, Phase 2) | ✅ implemented end-to-end, backend + frontend, ✓ verified |
 | Field-value search, JSON export (Phase 3) | ⬜ not started |
 | Multi-user, i18n, OCR, audit (Phase 4) | ⬜ not started |
 | Test coverage | 🟡 backend covered; no frontend tests |
@@ -106,14 +106,14 @@
 ## Phase 2 — Relationships (Epic E)
 
 - [x] `relationships` table modeled with constraints (self-link, unique pair+type)
-- [ ] Repository: create/list-for-person/delete
-- [ ] Service: canonicalize `child`→`parent`, inverse-label derivation (FR-23)
-- [ ] Service: reject self-links & duplicates (FR-24) — DB enforces; add friendly errors
-- [ ] Schemas: RelationshipCreate / RelationshipOut (with resolved direction)
-- [ ] Router: `POST /api/relationships`, `DELETE /api/relationships/{id}` (FR-22/25)
-- [ ] Include relationships in the person-detail payload
-- [ ] Frontend: relationships section — grouped chips, navigable, add/remove (Design System §5.5)
-- [ ] Tests: inverse label, self/duplicate rejection, bidirectional display
+- [x] Repository: create/list-for-person/delete — ✓ verified
+- [x] Service: canonicalize `child`→`parent`, inverse-label derivation (FR-23) — ✓ verified
+- [x] Service: reject self-links & duplicates (FR-24) — friendly 400/409, both stored orders checked
+- [x] Schemas: RelationshipCreate / RelationshipOut (with resolved direction) — ✓ verified
+- [x] Router: `POST /api/relationships`, `DELETE /api/relationships/{id}` (FR-22/25) — ✓ verified
+- [x] Include relationships in the person-detail payload — ✓ verified
+- [x] Frontend: relationships section — grouped chips, navigable, add/remove (Design System §5.5) — ✓ verified
+- [x] Tests: inverse label, self/duplicate rejection, bidirectional display — ✓ verified (8 new tests)
 
 ---
 
@@ -139,7 +139,7 @@
 ## Cross-cutting: quality, security, ops (do alongside phases)
 
 ### Testing
-- [x] Backend: auth, people, fields, documents flows (10 tests) — ✓ passing
+- [x] Backend: auth, people, fields, documents, relationships flows (19 tests) — ✓ passing
 - [ ] Backend: password-change flow, session expiry, photo upload validation
 - [ ] Frontend: Vitest + Testing Library — ID-card render, inline edit, pin, sensitive reveal, theme switch
 - [ ] End-to-end acceptance checklist mapped to §13

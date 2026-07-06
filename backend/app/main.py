@@ -15,7 +15,7 @@ from app.core.errors import AppError
 from app.db import SessionLocal
 from app.middleware import CSRFMiddleware
 from app.repositories.session_repo import SessionRepository
-from app.routers import auth, documents, fields, people, system
+from app.routers import auth, documents, fields, people, relationships, system
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -62,7 +62,14 @@ async def handle_app_error(_: Request, exc: AppError) -> JSONResponse:
     return JSONResponse({"detail": str(exc)}, status_code=exc.status)
 
 
-for router in (auth.router, people.router, fields.router, documents.router, system.router):
+for router in (
+    auth.router,
+    people.router,
+    fields.router,
+    documents.router,
+    relationships.router,
+    system.router,
+):
     app.include_router(router, prefix="/api")
 
 

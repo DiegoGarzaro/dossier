@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from app.schemas.document import DocumentOut
 from app.schemas.field import FieldOut
+from app.schemas.relationship import RelationshipOut
 
 
 class PersonCreate(BaseModel):
@@ -31,7 +32,7 @@ class PersonSummary(BaseModel):
 
 
 class PersonDetail(BaseModel):
-    """Full ID-card payload: person + fields + documents (FR-7)."""
+    """Full ID-card payload: person + fields + documents + relationships (FR-7)."""
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -40,5 +41,6 @@ class PersonDetail(BaseModel):
     has_photo: bool = False
     fields: list[FieldOut]
     documents: list[DocumentOut]
+    relationships: list[RelationshipOut] = []
     created_at: datetime
     updated_at: datetime

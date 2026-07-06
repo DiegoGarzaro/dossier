@@ -22,6 +22,16 @@ export interface DocumentOut {
   uploaded_at: string
 }
 
+export type RelationshipType = 'spouse' | 'parent' | 'child' | 'sibling' | 'custom'
+
+export interface RelationshipOut {
+  id: number
+  person_id: number
+  person_name: string
+  person_has_photo: boolean
+  label: string
+}
+
 export interface PersonSummary {
   id: number
   full_name: string
@@ -36,6 +46,7 @@ export interface PersonDetail {
   has_photo: boolean
   fields: FieldOut[]
   documents: DocumentOut[]
+  relationships: RelationshipOut[]
   created_at: string
   updated_at: string
 }

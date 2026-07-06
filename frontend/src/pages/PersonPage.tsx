@@ -16,7 +16,8 @@ import { type DragEvent, type FormEvent, useEffect, useRef, useState } from 'rea
 import { useNavigate, useParams } from 'react-router-dom'
 
 import { FieldRow, ValueInput } from '../components/FieldRow'
-import { Avatar, Button, Dialog, Input, Spinner } from '../components/ui'
+import { RelationshipSection } from '../components/RelationshipSection'
+import { Avatar, Button, Dialog, Input, SectionHeading, Spinner } from '../components/ui'
 import { ApiError, api } from '../lib/api'
 import type { DocumentOut, FieldOut, FieldType, PersonDetail } from '../lib/types'
 import { useFlip } from '../lib/useFlip'
@@ -34,15 +35,6 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function SectionHeading({ title, action }: { title: string; action?: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between border-b border-border px-4 py-3">
-      <h2 className="font-display text-lg font-semibold">{title}</h2>
-      {action}
-    </div>
-  )
 }
 
 function AddFieldForm({ personId, onDone }: { personId: number; onDone: () => void }) {
@@ -535,6 +527,9 @@ export function PersonPage() {
             <DocumentRow key={document.id} document={document} personId={detail.id} />
           ))
         )}
+
+        {/* Relationships */}
+        <RelationshipSection personId={detail.id} relationships={detail.relationships} />
       </div>
 
       <div className="flex justify-end">

@@ -49,6 +49,15 @@ export function Input({ label, id, className = '', ...rest }: InputProps) {
   )
 }
 
+export function SectionHeading({ title, action }: { title: string; action?: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between border-b border-border px-4 py-3">
+      <h2 className="font-display text-lg font-semibold">{title}</h2>
+      {action}
+    </div>
+  )
+}
+
 export function Avatar({
   name,
   photoUrl,

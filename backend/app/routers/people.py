@@ -7,7 +7,9 @@ from app.deps import CurrentUser, DbSession
 from app.models import Person
 from app.schemas.field import FieldOut
 from app.schemas.person import PersonCreate, PersonDetail, PersonSummary, PersonUpdate
+from app.schemas.relationship import RelationshipOut
 from app.services.people_service import PeopleService
+from app.services.relationship_service import RelationshipService
 
 router = APIRouter(prefix="/people", tags=["people"])
 
@@ -31,17 +33,19 @@ def _summary(person: Person) -> PersonSummary:
     )
 
 
-def _detail(person: Person) -> PersonDetail:
+def _detail(person: Person, relationships: list[RelationshipOut]) -> PersonDetail:
     """Build the full ID-card payload.
 
     Args:
         person (Person): The person with fields and documents loaded.
+        relationships (list[RelationshipOut]): The person's resolved relationships.
 
     Returns:
         PersonDetail: The detail representation.
     """
     detail = PersonDetail.model_validate(person)
     detail.has_photo = person.photo_path is not None
+    detail.relationships = relationships
     return detail
 
 
@@ -61,7 +65,9 @@ async def create_person(data: PersonCreate, _: CurrentUser, db: DbSession) -> Pe
 @router.get("/{person_id}", response_model=PersonDetail)
 async def get_person(person_id: int, _: CurrentUser, db: DbSession) -> PersonDetail:
     """Fetch the full ID-card payload (FR-7)."""
-    return _detail(await PeopleService(db).get_detail(person_id))
+    person = await PeopleService(db).get_detail(person_id)
+    relationships = await RelationshipService(db).list_for_person(person_id)
+    return _detail(person, relationships)
 
 
 @router.patch("/{person_id}", response_model=PersonDetail)

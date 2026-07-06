@@ -1,0 +1,242 @@
+/** Relationships section on the ID-card: grouped chips, add/remove (Epic E, Design System §5.5). */
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Plus, X } from 'lucide-react'
+import { type FormEvent, useDeferredValue, useState } from 'react'
+import { Link } from 'react-router-dom'
+
+import { api } from '../lib/api'
+import type { PersonSummary, RelationshipOut, RelationshipType } from '../lib/types'
+import { Avatar, Button, Dialog, Input, SectionHeading } from './ui'
+
+const RELATIONSHIP_TYPES: { value: RelationshipType; label: string }[] = [
+  { value: 'spouse', label: 'Spouse' },
+  { value: 'parent', label: 'Parent' },
+  { value: 'child', label: 'Child' },
+  { value: 'sibling', label: 'Sibling' },
+  { value: 'custom', label: 'Custom…' },
+]
+
+function groupByLabel(relationships: RelationshipOut[]): [string, RelationshipOut[]][] {
+  const groups = new Map<string, RelationshipOut[]>()
+  for (const item of relationships) {
+    const group = groups.get(item.label)
+    if (group) group.push(item)
+    else groups.set(item.label, [item])
+  }
+  return [...groups.entries()]
+}
+
+function RelationshipChip({
+  relationship,
+  onRemove,
+}: {
+  relationship: RelationshipOut
+  onRemove: () => void
+}) {
+  return (
+    <Link
+      to={`/people/${relationship.person_id}`}
+      className="group inline-flex items-center gap-2 rounded-full border border-border bg-surface py-1 pr-1 pl-1.5 text-sm transition-colors hover:bg-surface-hover"
+    >
+      <Avatar name={relationship.person_name} size={20} />
+      {relationship.person_name}
+      <button
+        type="button"
+        aria-label={`Remove relationship with ${relationship.person_name}`}
+        className="rounded-full p-0.5 text-subtle opacity-0 transition-opacity hover:bg-surface-hover hover:text-danger group-hover:opacity-100"
+        onClick={(event) => {
+          event.preventDefault()
+          event.stopPropagation()
+          onRemove()
+        }}
+      >
+        <X size={13} />
+      </button>
+    </Link>
+  )
+}
+
+function AddRelationshipDialog({ personId, onClose }: { personId: number; onClose: () => void }) {
+  const [query, setQuery] = useState('')
+  const [selected, setSelected] = useState<PersonSummary | null>(null)
+  const [type, setType] = useState<RelationshipType>('spouse')
+  const [customLabel, setCustomLabel] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const deferredQuery = useDeferredValue(query)
+
+  const results = useQuery({
+    queryKey: ['people-search', deferredQuery],
+    queryFn: () => api<PersonSummary[]>(`/api/people?q=${encodeURIComponent(deferredQuery)}`),
+    enabled: deferredQuery.trim().length > 0,
+  })
+
+  const create = useMutation({
+    mutationFn: () =>
+      api<RelationshipOut>('/api/relationships', {
+        method: 'POST',
+        body: {
+          person_id: personId,
+          related_person_id: selected?.id,
+          type,
+          custom_label: type === 'custom' ? customLabel : undefined,
+        },
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['person', personId] })
+      onClose()
+    },
+    onError: (err) => setError(err.message),
+  })
+
+  const onSubmit = (event: FormEvent) => {
+    event.preventDefault()
+    if (selected) create.mutate()
+  }
+
+  const candidates = (results.data ?? []).filter((person) => person.id !== personId)
+
+  return (
+    <Dialog title="Add relationship" onClose={onClose}>
+      <form onSubmit={onSubmit} className="space-y-4">
+        {selected ? (
+          <div className="flex items-center justify-between rounded-sm border border-border px-3 py-2">
+            <span className="flex items-center gap-2 text-sm">
+              <Avatar name={selected.full_name} size={24} />
+              {selected.full_name}
+            </span>
+            <Button type="button" variant="ghost" size="sm" onClick={() => setSelected(null)}>
+              Change
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <Input
+              id="relationship-search"
+              label="Person"
+              placeholder="Search by name…"
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              autoFocus
+            />
+            {candidates.length > 0 && (
+              <ul className="max-h-48 divide-y divide-border overflow-y-auto rounded-sm border border-border">
+                {candidates.map((person) => (
+                  <li key={person.id}>
+                    <button
+                      type="button"
+                      onClick={() => setSelected(person)}
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-hover"
+                    >
+                      <Avatar name={person.full_name} size={24} />
+                      {person.full_name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        <div className="space-y-1.5">
+          <label htmlFor="relationship-type" className="label-caps block">
+            Relationship
+          </label>
+          <select
+            id="relationship-type"
+            className="h-10 w-full rounded-sm border border-border bg-surface px-3 text-sm focus:border-accent"
+            value={type}
+            onChange={(event) => setType(event.target.value as RelationshipType)}
+          >
+            {RELATIONSHIP_TYPES.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {type === 'custom' && (
+          <Input
+            id="relationship-custom-label"
+            label="Label"
+            placeholder="e.g. Godmother"
+            value={customLabel}
+            onChange={(event) => setCustomLabel(event.target.value)}
+            required
+          />
+        )}
+
+        {error && (
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+        )}
+
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            disabled={!selected || create.isPending || (type === 'custom' && !customLabel.trim())}
+          >
+            Add
+          </Button>
+        </div>
+      </form>
+    </Dialog>
+  )
+}
+
+export function RelationshipSection({
+  personId,
+  relationships,
+}: {
+  personId: number
+  relationships: RelationshipOut[]
+}) {
+  const [adding, setAdding] = useState(false)
+  const queryClient = useQueryClient()
+
+  const remove = useMutation({
+    mutationFn: (relationshipId: number) =>
+      api<void>(`/api/relationships/${relationshipId}`, { method: 'DELETE' }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['person', personId] }),
+  })
+
+  return (
+    <>
+      <SectionHeading
+        title="Relationships"
+        action={
+          <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
+            <Plus size={14} aria-hidden /> Add relationship
+          </Button>
+        }
+      />
+      {relationships.length === 0 ? (
+        <p className="px-4 py-6 text-sm text-muted">No relationships yet.</p>
+      ) : (
+        <div className="space-y-4 px-4 py-4">
+          {groupByLabel(relationships).map(([label, items]) => (
+            <div key={label}>
+              <p className="label-caps mb-2">{label}</p>
+              <div className="flex flex-wrap gap-2">
+                {items.map((relationship) => (
+                  <RelationshipChip
+                    key={relationship.id}
+                    relationship={relationship}
+                    onRemove={() => remove.mutate(relationship.id)}
+                  />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      {adding && <AddRelationshipDialog personId={personId} onClose={() => setAdding(false)} />}
+    </>
+  )
+}
