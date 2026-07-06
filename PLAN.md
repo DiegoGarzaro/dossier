@@ -20,7 +20,7 @@
 | MVP frontend (all screens) | ✅ implemented, type-checks + builds |
 | Docker packaging | ✅ built, run, and verified end-to-end (arm64 + amd64) |
 | Relationships (Epic E, Phase 2) | ✅ implemented end-to-end, backend + frontend, ✓ verified |
-| Genealogy tree view (Phase 2b, new idea) | ⬜ not started |
+| People relationship tree view (Phase 2b, new idea) | ⬜ not started |
 | Field-value search, JSON/vCard export, encrypted backup (Phase 3) | ⬜ not started |
 | Multi-user, i18n, OCR, audit (Phase 4) | ⬜ not started |
 | Test coverage | 🟡 backend covered; no frontend tests |
@@ -118,16 +118,19 @@
 
 ---
 
-## Phase 2b — Genealogy tree view (new idea)
+## Phase 2b — People relationship tree view (new idea)
 
 > Not in the original requirements docs — user idea, added 2026-07-05. Builds directly on Epic E's
-> relationship data; view-only, no editing from this screen.
+> relationship data; view-only, no editing from this screen. Not a strict ancestry-only genealogy
+> chart — it visualizes every relationship type (spouse, parent/child, sibling, custom) as one
+> connected graph centered on a person.
 
-- [ ] Decide traversal scope (direct family only vs. full connected graph) and depth limit
-- [ ] Backend: endpoint that walks a person's relationship graph into a renderable tree/graph shape
-- [ ] Frontend: new read-only route (e.g. `/people/{id}/tree`) rendering the family tree
-- [ ] Handle non-tree cases gracefully (remarriage, multiple partners, sibling loops) — the
-      underlying relationship graph isn't strictly hierarchical
+- [ ] Decide traversal scope (direct connections only vs. full connected graph) and depth limit
+- [ ] Backend: endpoint that walks a person's relationship graph into a renderable graph shape
+- [ ] Frontend: new read-only route (e.g. `/people/{id}/tree`) rendering the relationship graph
+- [ ] Handle non-hierarchical cases gracefully (remarriage, multiple partners, sibling loops) — the
+      relationship graph isn't strictly a tree, so the layout needs to represent spouse/sibling
+      links (peers) distinctly from parent/child links (generations)
 - [ ] Nodes link back to each person's ID-card
 
 ---
