@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Camera,
   Check,
+  Contact,
   Download,
   FileText,
   Pencil,
@@ -532,7 +533,13 @@ export function PersonPage() {
         <RelationshipSection personId={detail.id} relationships={detail.relationships} />
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between">
+        <a
+          href={`/api/people/${detail.id}/vcard`}
+          className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:bg-surface-hover"
+        >
+          <Contact size={14} aria-hidden /> Export vCard
+        </a>
         <Button variant="danger" size="sm" onClick={() => setConfirmingDelete(true)}>
           <Trash2 size={14} aria-hidden /> Delete person
         </Button>

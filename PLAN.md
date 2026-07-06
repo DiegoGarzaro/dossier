@@ -16,12 +16,12 @@
 
 | Area | State |
 |---|---|
-| MVP backend (Epics A–D, search, backup) | ✅ implemented & tested (19/19 backend tests, ruff clean) |
+| MVP backend (Epics A–D, search, backup) | ✅ implemented & tested (26/26 backend tests, ruff clean) |
 | MVP frontend (all screens) | ✅ implemented, type-checks + builds |
 | Docker packaging | ✅ built, run, and verified end-to-end (arm64 + amd64) |
 | Relationships (Epic E, Phase 2) | ✅ implemented end-to-end, backend + frontend, ✓ verified |
 | People relationship tree view (Phase 2b, new idea) | ⬜ not started |
-| Field-value search, JSON/vCard export, encrypted backup (Phase 3) | ⬜ not started |
+| Field-value search, JSON export, encrypted backup (Phase 3) | ⬜ not started; vCard export ✅ done |
 | Multi-user, i18n, OCR, audit (Phase 4) | ⬜ not started |
 | Test coverage | 🟡 backend covered; no frontend tests |
 | Hardening (rate-limit, proxy flag, fonts) | 🟡 rate-limit + proxy flag done; fonts still gap (G-05) |
@@ -142,10 +142,13 @@
 - [ ] JSON export of one person / whole dataset (FR-30 / G3)
 - [ ] JSON import / restore-from-export
 - [ ] Settings polish (backup status, data summary)
-- [ ] **vCard export for a person** (new idea, added 2026-07-05, alongside JSON export FR-30):
-      `GET` a `.vcf` file for one person; needs a decision on field-mapping (which custom field
-      labels map to standard vCard properties like TEL/ADR/BDAY) and whether the profile photo
-      embeds as base64
+- [x] **vCard export for a person** (new idea, alongside JSON export FR-30) — ✓ verified.
+      `GET /api/people/{id}/vcard` (vCard 4.0). Field-mapping: label containing "email"/"phone"
+      → EMAIL/TEL, exact "Address" → ADR, everything else (non-sensitive, non-empty) → NOTE line;
+      `sensitive`-type values are always excluded (SEC-7). Relationships included as RELATED lines
+      with a TYPE param for the four standard types. "Export vCard" link on the ID-card. Deliberately
+      skips PHOTO embedding and RFC 6350 line-folding for >75-octet lines — both are follow-ups if
+      needed, not required for a useful, parseable file. 7 new tests.
 - [ ] **Encrypted backup/restore** (new idea, added 2026-07-05): in-app export produces a
       passphrase-encrypted archive; restore decrypts before applying. Goes beyond the current
       plain-tar procedure (G1/G2, README) — needs a decision on encryption approach (e.g. age/gpg
@@ -165,7 +168,7 @@
 ## Cross-cutting: quality, security, ops (do alongside phases)
 
 ### Testing
-- [x] Backend: auth, people, fields, documents, relationships flows (19 tests) — ✓ passing
+- [x] Backend: auth, people, fields, documents, relationships, vcard flows (26 tests) — ✓ passing
 - [ ] Backend: password-change flow, session expiry, photo upload validation
 - [ ] Frontend: Vitest + Testing Library — ID-card render, inline edit, pin, sensitive reveal, theme switch
 - [ ] End-to-end acceptance checklist mapped to §13
