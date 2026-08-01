@@ -78,6 +78,13 @@ export interface TreeOut {
   edges: TreeEdge[]
 }
 
+/** A user-defined label a person can be tagged with (Phase 3, tags & favorites). */
+export interface Tag {
+  id: number
+  name: string
+  person_count: number
+}
+
 export interface PersonSummary {
   id: number
   full_name: string
@@ -86,6 +93,8 @@ export interface PersonSummary {
   pinned_fields: FieldOut[]
   /** Fields whose value matched a field-value search, shown as the match reason (FR-27). */
   matched_fields?: FieldOut[]
+  is_favorite: boolean
+  tags: Tag[]
 }
 
 export interface PersonDetail {
@@ -97,6 +106,8 @@ export interface PersonDetail {
   relationships: RelationshipOut[]
   created_at: string
   updated_at: string
+  is_favorite: boolean
+  tags: Tag[]
 }
 
 /** Summary returned after a JSON import/restore (Phase 3, FR-30 / G3). */

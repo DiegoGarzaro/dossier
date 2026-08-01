@@ -8,7 +8,7 @@
 > the moment you discover a gap/bug/improvement while coding, log it in `ISSUES.md` with a `G-NN` id.
 > Items below may reference those ids (e.g. G-01) for traceability.
 
-**Last assessed:** 2026-07-31
+**Last assessed:** 2026-08-01
 
 ---
 
@@ -23,7 +23,8 @@
 | People relationship tree view (Phase 2b, new idea) | ✅ implemented end-to-end, ✓ verified |
 | Field-value search, JSON export, vCard export (Phase 3) | ✅ done, ✓ verified |
 | JSON import / restore (Phase 3) | ✅ done, ✓ verified |
-| Encrypted backup, tags/favorites, settings polish (Phase 3) | ⬜ not started |
+| Tags & favorites (Phase 3) | ✅ done, ✓ verified |
+| Encrypted backup, settings polish (Phase 3) | ⬜ not started |
 | Multi-user + per-user data, admin panel, audit, Postgres (Phase 4 epic) | ⏳ deferred until app is very mature; scoped 2026-07-06 |
 | Test coverage | 🟡 backend covered; frontend Vitest set up (tree-layout unit tests only so far) |
 | Hardening (rate-limit, proxy flag, fonts) | 🟡 rate-limit + proxy flag done; fonts still gap (G-05) |
@@ -222,15 +223,29 @@
 > namespaces overlap with the Phase 4 multi-user/per-user-data work, so don't build a parallel
 > concept — revisit only if true walled-off address books are wanted.
 
-- [ ] **Tags aggregate** (new Tag model + schema + repo + service + router, per layering): create/
+- [x] **Tags aggregate** (Tag model + schema + repo + service + router, per layering): create/
       rename/delete/list tags; a `person_tags` many-to-many join with cascade on person/tag delete.
-- [ ] Assign/unassign tags on the ID-card (chip UI, create-on-type); a person can hold many tags.
-- [ ] Filter the people index by one or more tags — extend the existing `GET /api/people` (add a
-      `tags=` filter alongside `q`/`fields`) so search + tag filter compose; show active tag chips.
-- [ ] **Favorite star**: `is_favorite` boolean on Person (model + migration), toggle on card/grid,
-      filter + sort favorites to the top of the index. Small, complementary to tags — do both.
-- [ ] Tests: tag CRUD + uniqueness, many-to-many assignment, cascade on delete, index filter by
-      tag (AND vs OR semantics — decide, default OR), favorite toggle + filter.
+      Names are normalized (whitespace collapsed) and unique case-insensitively (409 on collision).
+      Migration `11d65b4f14e2`, verified against the 28-person dev database, not just a fresh one.
+- [x] Assign/unassign tags on the ID-card (chip UI, create-on-type via
+      `POST /api/people/{id}/tags {name}`, which finds-or-creates then assigns, idempotently).
+- [x] Filter the people index by one or more tags — `GET /api/people?tags=1&tags=2` composes with
+      `q`/`fields`; **OR semantics** (decision taken), correlated `EXISTS` over the join table.
+- [x] **Favorite star**: `is_favorite` on Person, toggled through a now-partial `PATCH
+      /api/people/{id}` (a favorite toggle can never blank the name — see G-39), `?favorites=true`
+      filter, and favorites sorted ahead of everyone else by default.
+- [x] Export/import carry tags (by **name**, since ids are meaningless across vaults) and the
+      favorite flag; `EXPORT_SCHEMA_VERSION` bumped to 2 with v1 files still importing.
+- [x] Tests: 20 new backend tests (tag CRUD + case-insensitive uniqueness, normalization,
+      idempotent assign, both cascade directions, index filters, favorite toggle/filter/sort,
+      round-trip and v1 backward compatibility) + 8 frontend component tests. 24-point live
+      contract check across the real HTTP API — ✓ verified.
+- [x] Tag management UI in Settings — list with person counts, inline rename (the same
+      pencil → input → save/cancel pattern as `DocumentRow`/`FieldRow`), and delete behind a
+      confirmation that states how many people wear the tag and that deleting it removes only the
+      label, never a person. A rename collision surfaces the 409 message inline instead of failing
+      silently. Caught in review: the first pass built `PATCH`/`DELETE /api/tags/{id}` on the
+      backend with no surface anywhere, leaving them dead code — ✓ verified live.
 
 ---
 
@@ -310,10 +325,13 @@
 
 ### Testing
 - [x] Backend: auth, people, fields, documents, relationships, vcard, tree, kinship, export,
-      import flows (74 tests) — ✓ passing
-- [x] Frontend: Vitest set up (`npm run test`); tree-layout engine unit tests (9) — ✓ passing
+      import, tags flows (94 tests) — ✓ passing
+- [x] Frontend: Vitest + Testing Library + jsdom set up (`npm run test`); tree-layout unit tests
+      plus component tests for tags, favorites, index filters, tag rename/delete, and the SEC-7
+      mask (21) — ✓ passing
 - [ ] Backend: password-change flow, session expiry, photo upload validation
-- [ ] Frontend: Vitest + Testing Library — ID-card render, inline edit, pin, sensitive reveal, theme switch
+- [~] Frontend: Testing Library — sensitive reveal covered (SEC-7 guard); ID-card inline edit, pin,
+      drag-reorder, theme switch, and the export/import Settings flows still uncovered (G-04)
 - [ ] End-to-end acceptance checklist mapped to §13
 - [ ] CI pipeline: `ruff check`, pytest, eslint, FE build, docker build (Architecture §12)
 

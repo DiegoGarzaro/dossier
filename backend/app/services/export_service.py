@@ -54,10 +54,10 @@ def _field(field: PersonField, include_sensitive: bool) -> ExportField:
 
 
 def _person(person: Person, include_sensitive: bool) -> ExportPerson:
-    """Convert a person with their fields and document metadata.
+    """Convert a person with their fields, document metadata, tags, and favorite flag.
 
     Args:
-        person (Person): The person with fields and documents loaded.
+        person (Person): The person with fields, documents, and tags loaded.
         include_sensitive (bool): Whether `sensitive` values may be exported.
 
     Returns:
@@ -69,6 +69,8 @@ def _person(person: Person, include_sensitive: bool) -> ExportPerson:
         has_photo=person.photo_path is not None,
         created_at=person.created_at,
         updated_at=person.updated_at,
+        is_favorite=person.is_favorite,
+        tags=[tag.name for tag in person.tags],
         fields=[_field(field, include_sensitive) for field in person.fields],
         documents=[
             ExportDocument(

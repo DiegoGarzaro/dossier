@@ -1,12 +1,160 @@
 /** Settings — change password (FR-3); backup guidance lives in the README. */
 
-import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { FileJson, Upload } from 'lucide-react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check, FileJson, Pencil, Trash2, Upload, X } from 'lucide-react'
 import { type ChangeEvent, type FormEvent, useId, useState } from 'react'
 
-import { Button, Dialog, Input } from '../components/ui'
+import { Button, Dialog, Input, SectionHeading } from '../components/ui'
 import { ApiError, api } from '../lib/api'
-import type { ImportReport } from '../lib/types'
+import type { ImportReport, Tag } from '../lib/types'
+
+/** One row in the tags admin list: inline rename (pencil → input → save/cancel,
+ * mirroring FieldRow/DocumentRow) and delete-with-confirmation. */
+function TagRow({ tag }: { tag: Tag }) {
+  const [editing, setEditing] = useState(false)
+  const [name, setName] = useState(tag.name)
+  const [renameError, setRenameError] = useState<string | null>(null)
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const queryClient = useQueryClient()
+
+  // A rename/delete changes a label shown both in the filter bar and on
+  // people's cards elsewhere in the app, so both caches must refresh.
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['tags'] })
+    queryClient.invalidateQueries({ queryKey: ['people'] })
+  }
+
+  const rename = useMutation({
+    mutationFn: () => api<Tag>(`/api/tags/${tag.id}`, { method: 'PATCH', body: { name } }),
+    onSuccess: () => {
+      setEditing(false)
+      setRenameError(null)
+      invalidate()
+    },
+    onError: (error) => setRenameError(error.message),
+  })
+
+  const remove = useMutation({
+    mutationFn: () => api<void>(`/api/tags/${tag.id}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      setConfirmingDelete(false)
+      invalidate()
+    },
+  })
+
+  if (editing) {
+    return (
+      <form
+        onSubmit={(event) => {
+          event.preventDefault()
+          rename.mutate()
+        }}
+        className="flex items-center gap-3 px-4 py-3 odd:bg-surface-subtle"
+      >
+        <div className="min-w-0 flex-1">
+          <input
+            aria-label="Tag name"
+            className="h-9 w-full rounded-sm border border-border bg-surface px-3 text-sm focus:border-accent"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            autoFocus
+            required
+          />
+          {renameError && (
+            <p role="alert" className="mt-1 text-xs text-danger">
+              {renameError}
+            </p>
+          )}
+        </div>
+        <Button type="submit" size="sm" aria-label="Save tag name" disabled={rename.isPending}>
+          <Check size={15} />
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          aria-label="Cancel rename"
+          onClick={() => {
+            setEditing(false)
+            setName(tag.name)
+            setRenameError(null)
+          }}
+        >
+          <X size={15} />
+        </Button>
+      </form>
+    )
+  }
+
+  return (
+    <div className="flex items-center gap-3 px-4 py-3 odd:bg-surface-subtle">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{tag.name}</p>
+        <p className="text-xs text-muted">
+          {tag.person_count} {tag.person_count === 1 ? 'person' : 'people'}
+        </p>
+      </div>
+      <button
+        type="button"
+        aria-label={`Rename ${tag.name}`}
+        className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink"
+        onClick={() => setEditing(true)}
+      >
+        <Pencil size={16} />
+      </button>
+      <button
+        type="button"
+        aria-label={`Delete ${tag.name}`}
+        className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-danger"
+        onClick={() => setConfirmingDelete(true)}
+      >
+        <Trash2 size={16} />
+      </button>
+      {confirmingDelete && (
+        <Dialog title="Delete tag?" onClose={() => setConfirmingDelete(false)}>
+          <p className="mb-4 text-sm text-muted">
+            “{tag.name}” is worn by {tag.person_count} {tag.person_count === 1 ? 'person' : 'people'}
+            . Deleting it only removes the label — it does not delete any person.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setConfirmingDelete(false)}>
+              Cancel
+            </Button>
+            <Button variant="danger" onClick={() => remove.mutate()} disabled={remove.isPending}>
+              {remove.isPending ? 'Deleting…' : 'Delete'}
+            </Button>
+          </div>
+        </Dialog>
+      )}
+    </div>
+  )
+}
+
+/** Tags admin block: create-on-type lives on the ID-card; this is where a
+ * mistyped or unwanted tag gets fixed or removed (PLAN.md "tags & favorites"). */
+function TagsSection() {
+  const tags = useQuery({
+    queryKey: ['tags'],
+    queryFn: () => api<Tag[]>('/api/tags'),
+  })
+
+  const sorted = [...(tags.data ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-(--shadow-card)">
+      <SectionHeading title="Tags" />
+      {tags.isPending ? (
+        <p className="px-4 py-6 text-sm text-muted">Loading…</p>
+      ) : sorted.length === 0 ? (
+        <p className="px-4 py-6 text-sm text-muted">
+          No tags yet. Add one from a person's card.
+        </p>
+      ) : (
+        sorted.map((tag) => <TagRow key={tag.id} tag={tag} />)
+      )}
+    </div>
+  )
+}
 
 export function SettingsPage() {
   const queryClient = useQueryClient()
@@ -248,6 +396,8 @@ export function SettingsPage() {
           )}
         </div>
       </div>
+
+      <TagsSection />
 
       {confirmingImport && importFile && (
         <Dialog title="Import from export file" onClose={() => setConfirmingImport(false)}>

@@ -1,13 +1,145 @@
 /** People index — responsive grid of person cards with search (FR-10/26). */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Plus, Search, Users } from 'lucide-react'
+import { Plus, Search, Star, Users, X } from 'lucide-react'
 import { type FormEvent, useDeferredValue, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
 import { Avatar, Button, Dialog, EmptyState, Input, Spinner } from '../components/ui'
 import { api } from '../lib/api'
-import type { PersonDetail, PersonSummary } from '../lib/types'
+import type { PersonDetail, PersonSummary, Tag } from '../lib/types'
+
+function PersonCard({ person }: { person: PersonSummary }) {
+  const queryClient = useQueryClient()
+
+  const favorite = useMutation({
+    mutationFn: (next: boolean) =>
+      api<PersonDetail>(`/api/people/${person.id}`, { method: 'PATCH', body: { is_favorite: next } }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['people'] }),
+    // A failed toggle must not leave the star showing a state the server rejected (G-21 lesson).
+    onError: () => queryClient.invalidateQueries({ queryKey: ['people'] }),
+  })
+
+  return (
+    <Link
+      to={`/people/${person.id}`}
+      className="relative rounded-lg border border-border bg-surface p-5 shadow-(--shadow-card) transition-all hover:-translate-y-0.5 hover:shadow-(--shadow-raised)"
+    >
+      <button
+        type="button"
+        aria-label={person.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+        className={`absolute top-3 right-3 rounded-full p-1.5 hover:bg-surface-hover ${person.is_favorite ? 'text-seal' : 'text-subtle hover:text-ink'}`}
+        disabled={favorite.isPending}
+        onClick={(event) => {
+          // The card itself is a link; the star must act without navigating.
+          event.preventDefault()
+          event.stopPropagation()
+          favorite.mutate(!person.is_favorite)
+        }}
+      >
+        <Star size={16} fill={person.is_favorite ? 'currentColor' : 'none'} />
+      </button>
+      <div className="flex items-center gap-4">
+        <Avatar
+          name={person.full_name}
+          photoUrl={
+            person.has_photo
+              ? `/api/people/${person.id}/photo?v=${encodeURIComponent(person.updated_at)}`
+              : undefined
+          }
+        />
+        <div className="min-w-0">
+          <h2 className="truncate pr-6 font-display text-lg font-semibold">{person.full_name}</h2>
+          {person.pinned_fields.map((field) => (
+            <p key={field.id} className="truncate text-sm text-muted">
+              {field.value}
+            </p>
+          ))}
+          {person.matched_fields?.map((field) => (
+            <p key={`m-${field.id}`} className="truncate text-sm text-accent">
+              <span className="text-subtle">{field.label}:</span> {field.value}
+            </p>
+          ))}
+          {person.tags.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {person.tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="rounded-full bg-accent-fill px-2 py-0.5 text-xs text-accent"
+                >
+                  {tag.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </Link>
+  )
+}
+
+function TagFilterBar({
+  tags,
+  selected,
+  onToggle,
+  favoritesOnly,
+  onToggleFavorites,
+  onClear,
+}: {
+  tags: Tag[]
+  selected: number[]
+  onToggle: (id: number) => void
+  favoritesOnly: boolean
+  onToggleFavorites: () => void
+  onClear: () => void
+}) {
+  const active = selected.length > 0 || favoritesOnly
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        aria-pressed={favoritesOnly}
+        onClick={onToggleFavorites}
+        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+          favoritesOnly
+            ? 'border-seal bg-seal-fill text-seal'
+            : 'border-border bg-surface text-muted hover:bg-surface-hover hover:text-ink'
+        }`}
+      >
+        <Star size={12} aria-hidden fill={favoritesOnly ? 'currentColor' : 'none'} />
+        Favorites only
+      </button>
+      {tags.map((tag) => {
+        const isSelected = selected.includes(tag.id)
+        return (
+          <button
+            key={tag.id}
+            type="button"
+            aria-pressed={isSelected}
+            onClick={() => onToggle(tag.id)}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+              isSelected
+                ? 'border-accent bg-accent-fill text-accent'
+                : 'border-border bg-surface text-muted hover:bg-surface-hover hover:text-ink'
+            }`}
+          >
+            {tag.name}
+            <span className={isSelected ? 'text-accent/70' : 'text-subtle'}>{tag.person_count}</span>
+          </button>
+        )
+      })}
+      {active && (
+        <button
+          type="button"
+          onClick={onClear}
+          className="inline-flex items-center gap-1 text-xs text-muted hover:text-ink"
+        >
+          <X size={12} aria-hidden /> Clear filters
+        </button>
+      )}
+    </div>
+  )
+}
 
 export function PeopleIndex() {
   const [query, setQuery] = useState('')
@@ -15,19 +147,38 @@ export function PeopleIndex() {
   const deferredQuery = useDeferredValue(query)
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
+  const [selectedTags, setSelectedTags] = useState<number[]>([])
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
+  const tags = useQuery({
+    queryKey: ['tags'],
+    queryFn: () => api<Tag[]>('/api/tags'),
+  })
+
   const people = useQuery({
-    queryKey: ['people', deferredQuery, searchFields],
+    queryKey: ['people', deferredQuery, searchFields, selectedTags, favoritesOnly],
     queryFn: () => {
       const params = new URLSearchParams()
       if (deferredQuery) params.set('q', deferredQuery)
       if (searchFields) params.set('fields', 'true')
+      for (const tagId of selectedTags) params.append('tags', String(tagId))
+      if (favoritesOnly) params.set('favorites', 'true')
       const suffix = params.toString()
       return api<PersonSummary[]>(`/api/people${suffix ? `?${suffix}` : ''}`)
     },
   })
+
+  const toggleTag = (id: number) =>
+    setSelectedTags((current) =>
+      current.includes(id) ? current.filter((tagId) => tagId !== id) : [...current, id],
+    )
+
+  const clearFilters = () => {
+    setSelectedTags([])
+    setFavoritesOnly(false)
+  }
 
   const create = useMutation({
     mutationFn: () =>
@@ -74,40 +225,21 @@ export function PeopleIndex() {
         </Button>
       </div>
 
+      <TagFilterBar
+        tags={tags.data ?? []}
+        selected={selectedTags}
+        onToggle={toggleTag}
+        favoritesOnly={favoritesOnly}
+        onToggleFavorites={() => setFavoritesOnly((current) => !current)}
+        onClear={clearFilters}
+      />
+
       {people.isPending ? (
         <Spinner />
       ) : people.data && people.data.length > 0 ? (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-5">
           {people.data.map((person) => (
-            <Link
-              key={person.id}
-              to={`/people/${person.id}`}
-              className="rounded-lg border border-border bg-surface p-5 shadow-(--shadow-card) transition-all hover:-translate-y-0.5 hover:shadow-(--shadow-raised)"
-            >
-              <div className="flex items-center gap-4">
-                <Avatar
-                  name={person.full_name}
-                  photoUrl={
-                    person.has_photo
-                      ? `/api/people/${person.id}/photo?v=${encodeURIComponent(person.updated_at)}`
-                      : undefined
-                  }
-                />
-                <div className="min-w-0">
-                  <h2 className="truncate font-display text-lg font-semibold">{person.full_name}</h2>
-                  {person.pinned_fields.map((field) => (
-                    <p key={field.id} className="truncate text-sm text-muted">
-                      {field.value}
-                    </p>
-                  ))}
-                  {person.matched_fields?.map((field) => (
-                    <p key={`m-${field.id}`} className="truncate text-sm text-accent">
-                      <span className="text-subtle">{field.label}:</span> {field.value}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            </Link>
+            <PersonCard key={person.id} person={person} />
           ))}
         </div>
       ) : (

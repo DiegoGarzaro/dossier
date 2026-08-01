@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.enums import FieldType
-from app.core.errors import NotFoundError, PayloadTooLargeError
+from app.core.errors import InvalidInputError, NotFoundError, PayloadTooLargeError
 from app.core.files import ALLOWED_DOCUMENT_TYPES, IMAGE_TYPES, sniff_mime
 from app.models import Person, PersonField
 from app.repositories.people_repo import PeopleRepository
@@ -41,18 +41,30 @@ class PeopleService:
         """
         self._people = PeopleRepository(session)
 
-    async def list(self, query: str | None = None, include_fields: bool = False) -> list[Person]:
-        """List people for the index grid, optionally searching field values (FR-10/26/27).
+    async def list(
+        self,
+        query: str | None = None,
+        include_fields: bool = False,
+        tag_ids: list[int] | None = None,
+        favorites_only: bool = False,
+    ) -> list[Person]:
+        """List people for the index grid, optionally searching field values ("Organizing people").
 
         Args:
             query (str | None): Optional name (or field-value) search.
             include_fields (bool): Widen the search to non-sensitive field
                 values as well as the name (SEC-7 keeps sensitive out).
+            tag_ids (list[int] | None): Only return people wearing at least
+                one of these tags (OR semantics).
+            favorites_only (bool): Only return favorited people.
 
         Returns:
-            list[Person]: People ordered by name with fields loaded.
+            list[Person]: People with favorites first, then ordered by name,
+                with fields and tags loaded.
         """
-        return await self._people.list(query, include_fields=include_fields)
+        return await self._people.list(
+            query, include_fields=include_fields, tag_ids=tag_ids, favorites_only=favorites_only
+        )
 
     async def create(self, data: PersonCreate) -> Person:
         """Create a person with pre-populated empty pinned fields (FR-6/17).
@@ -95,22 +107,33 @@ class PeopleService:
         return person
 
     async def update(self, person_id: int, data: PersonUpdate) -> Person:
-        """Rename a person (FR-8).
+        """Partially update a person: name and/or favorite flag (FR-8, "Organizing people").
+
+        Only the fields actually present in the request are applied, so a
+        favorite toggle sent on its own can never blank the name.
 
         Args:
             person_id (int): The person id.
-            data (PersonUpdate): The update payload.
+            data (PersonUpdate): The partial update payload.
 
         Returns:
             Person: The updated person.
 
         Raises:
             NotFoundError: If the person does not exist.
+            InvalidInputError: If `full_name` was explicitly sent as null —
+                `PersonUpdate.full_name` is optional so a request can omit it
+                entirely, but sending it as null would otherwise write a NULL
+                into a NOT NULL column instead of being treated as "unset".
         """
         person = await self._people.get(person_id)
         if person is None:
             raise NotFoundError("Person not found")
-        person.full_name = data.full_name
+        updates = data.model_dump(exclude_unset=True)
+        if updates.get("full_name") is None and "full_name" in updates:
+            raise InvalidInputError("Name cannot be blank")
+        for key, value in updates.items():
+            setattr(person, key, value)
         return person
 
     async def delete(self, person_id: int) -> None:

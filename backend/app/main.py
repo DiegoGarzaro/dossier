@@ -15,7 +15,7 @@ from app.core.errors import AppError
 from app.db import SessionLocal
 from app.middleware import CSRFMiddleware
 from app.repositories.session_repo import SessionRepository
-from app.routers import auth, documents, export, fields, people, relationships, system
+from app.routers import auth, documents, export, fields, people, relationships, system, tags
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -68,6 +68,7 @@ for router in (
     fields.router,
     documents.router,
     relationships.router,
+    tags.router,
     export.router,
     system.router,
 ):

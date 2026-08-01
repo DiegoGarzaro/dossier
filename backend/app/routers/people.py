@@ -1,6 +1,8 @@
 """People routes: index, ID-card detail, create/edit/delete, photo (Epic B)."""
 
-from fastapi import APIRouter, UploadFile
+from typing import Annotated
+
+from fastapi import APIRouter, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 
 from app.core.enums import FieldType
@@ -9,6 +11,7 @@ from app.models import Person, PersonField
 from app.schemas.field import FieldOut
 from app.schemas.person import PersonCreate, PersonDetail, PersonSummary, PersonUpdate
 from app.schemas.relationship import RelationshipOut, TreeOut
+from app.schemas.tag import TagOut
 from app.services.people_service import PeopleService
 from app.services.relationship_service import RelationshipService
 from app.services.vcard_service import VCardService
@@ -46,6 +49,8 @@ def _summary(person: Person, match_query: str | None = None) -> PersonSummary:
         full_name=person.full_name,
         has_photo=person.photo_path is not None,
         updated_at=person.updated_at,
+        is_favorite=person.is_favorite,
+        tags=[TagOut.model_validate(tag) for tag in person.tags],
         pinned_fields=[FieldOut.model_validate(field) for field in pinned[:2]],
         matched_fields=[FieldOut.model_validate(field) for field in matched[:3]],
     )
@@ -55,7 +60,7 @@ def _detail(person: Person, relationships: list[RelationshipOut]) -> PersonDetai
     """Build the full ID-card payload.
 
     Args:
-        person (Person): The person with fields and documents loaded.
+        person (Person): The person with fields, documents, and tags loaded.
         relationships (list[RelationshipOut]): The person's resolved relationships.
 
     Returns:
@@ -69,13 +74,23 @@ def _detail(person: Person, relationships: list[RelationshipOut]) -> PersonDetai
 
 @router.get("", response_model=list[PersonSummary])
 async def list_people(
-    _: CurrentUser, db: DbSession, q: str | None = None, fields: bool = False
+    _: CurrentUser,
+    db: DbSession,
+    q: str | None = None,
+    fields: bool = False,
+    tags: Annotated[list[int] | None, Query()] = None,
+    favorites: bool = False,
 ) -> list[PersonSummary]:
     """List people for the index grid; `fields=true` also searches field values (FR-10/26/27).
 
-    Sensitive field values are excluded from the search and never surfaced (SEC-7).
+    `tags` filters to people wearing any of the given tag ids (OR semantics)
+    and `favorites=true` filters to favorited people only; both compose with
+    `q` ("Organizing people"). Sensitive field values are excluded from the
+    search and never surfaced (SEC-7).
     """
-    people = await PeopleService(db).list(q, include_fields=fields)
+    people = await PeopleService(db).list(
+        q, include_fields=fields, tag_ids=tags, favorites_only=favorites
+    )
     match_query = q if fields else None
     return [_summary(person, match_query) for person in people]
 
@@ -99,7 +114,7 @@ async def get_person(person_id: int, _: CurrentUser, db: DbSession) -> PersonDet
 async def update_person(
     person_id: int, data: PersonUpdate, _: CurrentUser, db: DbSession
 ) -> PersonDetail:
-    """Rename a person (FR-8)."""
+    """Partially edit a person: name and/or favorite flag (FR-8, "Organizing people")."""
     await PeopleService(db).update(person_id, data)
     return await get_person(person_id, _, db)
 

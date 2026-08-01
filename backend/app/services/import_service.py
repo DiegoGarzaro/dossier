@@ -28,6 +28,7 @@ from app.schemas.export import (
 from app.schemas.relationship import RelationshipCreate
 from app.services.field_service import validate_value
 from app.services.relationship_service import RelationshipService
+from app.services.tag_service import TagService
 
 # A person-scoped export can reference someone who isn't in the file; refuse
 # absurd sizes before doing any work rather than importing for minutes.
@@ -52,6 +53,7 @@ class ImportService:
         """
         self._people = PeopleRepository(session)
         self._relationships = RelationshipService(session)
+        self._tags = TagService(session)
 
     async def apply(self, envelope: ExportEnvelope) -> ImportReport:
         """Import an export envelope, creating what's missing and reporting the rest.
@@ -139,11 +141,13 @@ class ImportService:
             )
 
     async def _create_person(self, exported: ExportPerson) -> Person:
-        """Create a person with exactly the fields in the file.
+        """Create a person with exactly the fields, favorite flag, and tags in the file.
 
         The seeded system fields are deliberately *not* added here: the export
         already carries them, so letting `PeopleService.create` seed would
-        duplicate every built-in field.
+        duplicate every built-in field. Tags are find-or-created by name and
+        assigned only to newly created people — a skipped (already-existing)
+        person never has their tags touched, keeping import additive.
 
         Args:
             exported (ExportPerson): The person as exported.
@@ -152,7 +156,7 @@ class ImportService:
             Person: The persisted person with its fields.
         """
         ordered = sorted(exported.fields, key=lambda field: field.position)
-        person = Person(full_name=exported.full_name)
+        person = Person(full_name=exported.full_name, is_favorite=exported.is_favorite)
         person.fields = [
             PersonField(
                 label=field.label,
@@ -164,7 +168,10 @@ class ImportService:
             )
             for position, field in enumerate(ordered)
         ]
-        return await self._people.add(person)
+        person = await self._people.add(person)
+        for tag_name in exported.tags:
+            await self._tags.assign(person.id, tag_name)
+        return person
 
     async def _restore_link(
         self, link: ExportRelationship, id_map: dict[int, int], report: ImportReport

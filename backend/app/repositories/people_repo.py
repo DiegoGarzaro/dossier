@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.enums import FieldType
 from app.models import Person, PersonField
+from app.models.tag import person_tags
 
 
 class PeopleRepository:
@@ -20,7 +21,7 @@ class PeopleRepository:
         self._session = session
 
     async def list_with_details(self) -> list[Person]:
-        """List every person with fields and documents eagerly loaded (FR-30).
+        """List every person with fields, documents, and tags eagerly loaded (FR-30).
 
         Used by the whole-dataset JSON export, which needs the full record for
         each person rather than the index-grid subset.
@@ -34,13 +35,23 @@ class PeopleRepository:
         """
         result = await self._session.execute(
             select(Person)
-            .options(selectinload(Person.fields), selectinload(Person.documents))
+            .options(
+                selectinload(Person.fields),
+                selectinload(Person.documents),
+                selectinload(Person.tags),
+            )
             .order_by(Person.full_name)
         )
         return list(result.scalars().all())
 
-    async def list(self, query: str | None = None, include_fields: bool = False) -> list[Person]:
-        """List people, optionally filtered by name or field-value search (FR-10/26/27).
+    async def list(
+        self,
+        query: str | None = None,
+        include_fields: bool = False,
+        tag_ids: list[int] | None = None,
+        favorites_only: bool = False,
+    ) -> list[Person]:
+        """List people, optionally filtered by name, field value, tag, or favorite status.
 
         Args:
             query (str | None): Case-insensitive substring to match. `%`/`_`
@@ -48,11 +59,19 @@ class PeopleRepository:
             include_fields (bool): When True, also match against custom field
                 values. `sensitive`-type values are always excluded from the
                 search so secrets stay unindexed (SEC-7).
+            tag_ids (list[int] | None): When given, only people wearing at
+                least one of these tags are returned (OR semantics).
+            favorites_only (bool): When True, only favorited people are returned.
 
         Returns:
-            list[Person]: People ordered by name, with fields eagerly loaded.
+            list[Person]: People with favorites first, then ordered by name,
+                with fields and tags eagerly loaded.
         """
-        stmt = select(Person).options(selectinload(Person.fields)).order_by(Person.full_name)
+        stmt = (
+            select(Person)
+            .options(selectinload(Person.fields), selectinload(Person.tags))
+            .order_by(Person.is_favorite.desc(), Person.full_name)
+        )
         if query:
             escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             pattern = f"%{escaped}%"
@@ -71,6 +90,20 @@ class PeopleRepository:
                 stmt = stmt.where(or_(name_match, field_match))
             else:
                 stmt = stmt.where(name_match)
+        if favorites_only:
+            stmt = stmt.where(Person.is_favorite.is_(True))
+        if tag_ids:
+            # Correlated EXISTS over the association table (OR semantics):
+            # matches the style of the field-value EXISTS block above.
+            tag_match = (
+                select(person_tags.c.person_id)
+                .where(
+                    person_tags.c.person_id == Person.id,
+                    person_tags.c.tag_id.in_(tag_ids),
+                )
+                .exists()
+            )
+            stmt = stmt.where(tag_match)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
@@ -100,7 +133,7 @@ class PeopleRepository:
         return result.scalar_one_or_none()
 
     async def get_with_details(self, person_id: int) -> Person | None:
-        """Fetch a person with fields and documents eagerly loaded (FR-7).
+        """Fetch a person with fields, documents, and tags eagerly loaded (FR-7).
 
         Args:
             person_id (int): The person id.
@@ -110,8 +143,26 @@ class PeopleRepository:
         """
         result = await self._session.execute(
             select(Person)
-            .options(selectinload(Person.fields), selectinload(Person.documents))
+            .options(
+                selectinload(Person.fields),
+                selectinload(Person.documents),
+                selectinload(Person.tags),
+            )
             .where(Person.id == person_id)
+        )
+        return result.scalar_one_or_none()
+
+    async def get_with_tags(self, person_id: int) -> Person | None:
+        """Fetch a person with their tags eagerly loaded, for assigning/unassigning.
+
+        Args:
+            person_id (int): The person id.
+
+        Returns:
+            Person | None: The person with tags loaded, or None.
+        """
+        result = await self._session.execute(
+            select(Person).options(selectinload(Person.tags)).where(Person.id == person_id)
         )
         return result.scalar_one_or_none()
 

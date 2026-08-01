@@ -10,6 +10,7 @@ import {
   FileText,
   Pencil,
   Plus,
+  Star,
   Trash2,
   Upload,
   X,
@@ -19,6 +20,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 
 import { FieldRow, ValueInput } from '../components/FieldRow'
 import { RelationshipSection } from '../components/RelationshipSection'
+import { TagsSection } from '../components/TagsSection'
 import { Avatar, Button, Dialog, Input, SectionHeading, Spinner } from '../components/ui'
 import { ApiError, api } from '../lib/api'
 import type { DocumentOut, FieldOut, FieldType, PersonDetail } from '../lib/types'
@@ -266,6 +268,17 @@ export function PersonPage() {
     },
   })
 
+  const favorite = useMutation({
+    mutationFn: (next: boolean) =>
+      api<PersonDetail>(`/api/people/${personId}`, { method: 'PATCH', body: { is_favorite: next } }),
+    onSuccess: () => {
+      invalidate()
+      queryClient.invalidateQueries({ queryKey: ['people'] })
+    },
+    // A failed toggle must not leave the star showing a state the server rejected (G-21 lesson).
+    onError: invalidate,
+  })
+
   const removePerson = useMutation({
     mutationFn: () => api<void>(`/api/people/${personId}`, { method: 'DELETE' }),
     onSuccess: () => {
@@ -413,6 +426,15 @@ export function PersonPage() {
               >
                 <Pencil size={15} />
               </button>
+              <button
+                type="button"
+                aria-label={detail.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+                className={`mt-1.5 rounded p-1.5 hover:bg-surface-hover ${detail.is_favorite ? 'text-seal' : 'text-subtle hover:text-ink'}`}
+                onClick={() => favorite.mutate(!detail.is_favorite)}
+                disabled={favorite.isPending}
+              >
+                <Star size={15} fill={detail.is_favorite ? 'currentColor' : 'none'} />
+              </button>
             </div>
             {pinned.length > 0 && (
               <dl className="mt-4 space-y-2 border-l-2 border-seal pl-3">
@@ -437,6 +459,9 @@ export function PersonPage() {
             )}
           </div>
         </div>
+
+        {/* Tags */}
+        <TagsSection personId={detail.id} tags={detail.tags} />
 
         {/* Fields */}
         <SectionHeading

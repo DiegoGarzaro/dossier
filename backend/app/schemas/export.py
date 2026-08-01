@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.core.enums import FieldType, RelationshipType
 
-EXPORT_SCHEMA_VERSION = 1
+EXPORT_SCHEMA_VERSION = 2
 
 ExportScope = Literal["person", "dataset"]
 
@@ -52,13 +52,21 @@ class ExportDocument(BaseModel):
 
 
 class ExportPerson(BaseModel):
-    """One person with their fields and document metadata."""
+    """One person with their fields, document metadata, tags, and favorite flag.
+
+    `tags` carries tag **names**, not ids — ids are meaningless across vaults,
+    while a name can be matched (and find-or-created) on import. Both `tags`
+    and `is_favorite` default so a schema-v1 file (produced before either
+    existed) still validates and imports cleanly.
+    """
 
     id: int
     full_name: str = Field(min_length=1, max_length=255)
     has_photo: bool
     created_at: datetime
     updated_at: datetime
+    is_favorite: bool = False
+    tags: list[str] = []
     fields: list[ExportField]
     documents: list[ExportDocument]
 

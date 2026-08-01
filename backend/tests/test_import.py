@@ -293,6 +293,107 @@ async def test_import_rejects_a_foreign_file(authed_client: AsyncClient) -> None
     assert (await authed_client.get("/api/people", params={"q": "Import Foreign"})).json() == []
 
 
+async def test_import_round_trip_preserves_tags_and_favorite_flag(
+    authed_client: AsyncClient,
+) -> None:
+    """Export -> delete -> import brings back the favorite flag and tags ("Organizing people")."""
+    created = await authed_client.post(
+        "/api/people", json={"full_name": "Import Tags Round Trip"}
+    )
+    person_id = created.json()["id"]
+    await authed_client.patch(f"/api/people/{person_id}", json={"is_favorite": True})
+    tag = (
+        await authed_client.post(
+            f"/api/people/{person_id}/tags", json={"name": "Round Trip Tag"}
+        )
+    ).json()
+
+    exported = (await authed_client.get(f"/api/people/{person_id}/export")).json()
+    assert exported["people"][0]["is_favorite"] is True
+    assert exported["people"][0]["tags"] == ["Round Trip Tag"]
+
+    assert (await authed_client.delete(f"/api/people/{person_id}")).status_code == 204
+    assert (await authed_client.delete(f"/api/tags/{tag['id']}")).status_code == 204
+
+    report = (await authed_client.post("/api/import", json=exported)).json()
+    assert report["people_created"] == 1
+
+    restored = (
+        await authed_client.get("/api/people", params={"q": "Import Tags Round Trip"})
+    ).json()
+    assert len(restored) == 1
+    assert restored[0]["is_favorite"] is True
+    assert [t["name"] for t in restored[0]["tags"]] == ["Round Trip Tag"]
+    restored_tag_id = restored[0]["tags"][0]["id"]
+
+    await _cleanup(authed_client, "Import Tags Round Trip")
+    await authed_client.delete(f"/api/tags/{restored_tag_id}")
+
+
+async def test_import_skipped_person_keeps_their_existing_tags_untouched(
+    authed_client: AsyncClient,
+) -> None:
+    """Import is additive: a skipped (already-existing) person's tags are never changed."""
+    created = await authed_client.post(
+        "/api/people", json={"full_name": "Import Skip Keeps Tags"}
+    )
+    person_id = created.json()["id"]
+    kept_tag = (
+        await authed_client.post(
+            f"/api/people/{person_id}/tags", json={"name": "Kept Tag"}
+        )
+    ).json()
+
+    payload = _envelope(
+        people=[
+            _person(
+                99,
+                "Import Skip Keeps Tags",
+                is_favorite=True,
+                tags=["Should Not Attach"],
+            )
+        ]
+    )
+    report = (await authed_client.post("/api/import", json=payload)).json()
+    assert report["people_skipped"] == 1
+
+    detail = (await authed_client.get(f"/api/people/{person_id}")).json()
+    assert detail["is_favorite"] is False  # skipped person's flag stays untouched too
+    assert [t["name"] for t in detail["tags"]] == ["Kept Tag"]
+
+    stray = (await authed_client.get("/api/tags")).json()
+    assert all(t["name"] != "Should Not Attach" for t in stray)
+
+    await authed_client.delete(f"/api/people/{person_id}")
+    await authed_client.delete(f"/api/tags/{kept_tag['id']}")
+
+
+async def test_import_v1_schema_payload_without_tags_key_still_imports(
+    authed_client: AsyncClient,
+) -> None:
+    """A schema-v1 file (no `tags`/`is_favorite` keys) still imports cleanly (backward compat)."""
+    # `_person()`'s base dict has no `tags`/`is_favorite` keys, exactly like a real v1 file —
+    # the schema's field defaults (False / []) must fill the gap.
+    v1_person = _person(1, "Import Legacy V1 Payload")
+    assert "tags" not in v1_person
+    assert "is_favorite" not in v1_person
+    payload = _envelope(schema_version=1, people=[v1_person])
+
+    response = await authed_client.post("/api/import", json=payload)
+    assert response.status_code == 200, response.text
+    report = response.json()
+    assert report["people_created"] == 1
+
+    restored = (
+        await authed_client.get("/api/people", params={"q": "Import Legacy V1 Payload"})
+    ).json()
+    assert len(restored) == 1
+    assert restored[0]["is_favorite"] is False
+    assert restored[0]["tags"] == []
+
+    await _cleanup(authed_client, "Import Legacy V1 Payload")
+
+
 async def test_import_validates_field_values_against_their_type(
     authed_client: AsyncClient,
 ) -> None:

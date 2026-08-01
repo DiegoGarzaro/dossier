@@ -43,7 +43,7 @@ async def test_person_export_envelope_and_fields(authed_client: AsyncClient) -> 
     assert response.headers["x-content-type-options"] == "nosniff"
 
     payload = response.json()
-    assert payload["schema_version"] == 1
+    assert payload["schema_version"] == 2
     assert payload["generator"] == "dossier"
     assert payload["scope"] == "person"
     assert payload["includes_sensitive_values"] is False
@@ -218,3 +218,27 @@ async def test_dataset_export_omits_sensitive_values_by_default(
 async def test_person_export_unknown_person_returns_404(authed_client: AsyncClient) -> None:
     """Exporting a missing person is a clean 404, not a 500."""
     assert (await authed_client.get("/api/people/999999/export")).status_code == 404
+
+
+async def test_export_carries_favorite_flag_and_tag_names(authed_client: AsyncClient) -> None:
+    """The favorite flag and tag names travel in both export scopes ("Organizing people")."""
+    person = await _create_person(authed_client, "Export Tags And Favorite")
+    pid = person["id"]
+    await authed_client.patch(f"/api/people/{pid}", json={"is_favorite": True})
+    tag = (
+        await authed_client.post(f"/api/people/{pid}/tags", json={"name": "Export Tag"})
+    ).json()
+
+    person_export = (await authed_client.get(f"/api/people/{pid}/export")).json()
+    assert person_export["schema_version"] == 2
+    exported = person_export["people"][0]
+    assert exported["is_favorite"] is True
+    assert exported["tags"] == ["Export Tag"]
+
+    dataset_export = (await authed_client.get("/api/export")).json()
+    exported_in_dataset = next(p for p in dataset_export["people"] if p["id"] == pid)
+    assert exported_in_dataset["is_favorite"] is True
+    assert exported_in_dataset["tags"] == ["Export Tag"]
+
+    await authed_client.delete(f"/api/people/{pid}")
+    await authed_client.delete(f"/api/tags/{tag['id']}")

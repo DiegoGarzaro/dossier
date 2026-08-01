@@ -6,6 +6,7 @@ from app.models.field import PersonField
 from app.models.person import Person
 from app.models.relationship import Relationship
 from app.models.session import AuthSession
+from app.models.tag import Tag
 from app.models.user import User
 
 __all__ = [
@@ -15,5 +16,6 @@ __all__ = [
     "Person",
     "PersonField",
     "Relationship",
+    "Tag",
     "User",
 ]

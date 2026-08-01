@@ -31,6 +31,21 @@ async def test_person_crud_and_default_pinned_fields(authed_client: AsyncClient)
     assert (await authed_client.get(f"/api/people/{person['id']}")).status_code == 404
 
 
+async def test_update_rejects_explicit_null_full_name(authed_client: AsyncClient) -> None:
+    """`full_name` is optional on PATCH (so a favorite toggle can omit it), but an
+    explicit null is rejected rather than silently attempting a NULL name write."""
+    person = await _create_person(authed_client, "Null Name Guard")
+    pid = person["id"]
+
+    response = await authed_client.patch(f"/api/people/{pid}", json={"full_name": None})
+    assert response.status_code == 400
+
+    unchanged = (await authed_client.get(f"/api/people/{pid}")).json()
+    assert unchanged["full_name"] == "Null Name Guard"
+
+    await authed_client.delete(f"/api/people/{pid}")
+
+
 async def test_name_search(authed_client: AsyncClient) -> None:
     """Index search matches names case-insensitively (FR-26)."""
     person = await _create_person(authed_client, "Zulmira Searchable")
