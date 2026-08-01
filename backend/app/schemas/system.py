@@ -16,3 +16,4 @@ class SystemSummary(BaseModel):
     uploads_bytes: int
     database_bytes: int
     last_backup_at: datetime | None
+    version: str

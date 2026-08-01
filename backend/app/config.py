@@ -19,6 +19,9 @@ class Settings(BaseSettings):
         trust_proxy (bool): Whether the app runs behind a reverse proxy (SEC-8).
         login_max_attempts (int): Consecutive failed logins before an account locks (G-07).
         login_lockout_minutes (int): Minutes an account stays locked after too many failures.
+        version (str): The running build's version, baked into the image at build time via
+            the `DOSSIER_VERSION` container env var. Defaults to `"dev"` for local/uncontainerized
+            runs so that value is never mistaken for a real release.
     """
 
     model_config = SettingsConfigDict(env_prefix="DOSSIER_")
@@ -31,6 +34,7 @@ class Settings(BaseSettings):
     trust_proxy: bool = False
     login_max_attempts: int = 5
     login_lockout_minutes: int = 15
+    version: str = "dev"
 
     @property
     def database_url(self) -> str:

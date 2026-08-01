@@ -135,6 +135,7 @@ export interface SystemSummary {
   uploads_bytes: number
   database_bytes: number
   last_backup_at: string | null
+  version: string
 }
 
 export interface AuthStatus {

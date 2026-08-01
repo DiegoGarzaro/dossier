@@ -293,6 +293,25 @@ async def test_system_summary_requires_authentication(client: AsyncClient) -> No
     assert (await client.get("/api/system/summary")).status_code == 401
 
 
+async def test_system_summary_reports_configured_version(
+    authed_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`GET /api/system/summary` echoes `DOSSIER_VERSION` so an admin can tell which
+    build is running, six months from now, without SSHing into the box (release pipeline)."""
+    versioned = get_settings().model_copy(update={"version": "1.2.3"})
+    monkeypatch.setattr("app.services.system_service.get_settings", lambda: versioned)
+
+    response = await authed_client.get("/api/system/summary")
+    assert response.json()["version"] == "1.2.3"
+
+
+async def test_health_does_not_report_version(client: AsyncClient) -> None:
+    """The unauthenticated health probe must never advertise the exact build version —
+    that would tell an unauthenticated caller which advisories to try. Health stays boring."""
+    response = await client.get("/api/system/health")
+    assert "version" not in response.json()
+
+
 async def test_backup_and_restore_require_authentication(client: AsyncClient) -> None:
     """Both routes sit behind the auth guard (SEC-1), independent of CSRF."""
     await client.get("/api/auth/status")  # seeds the CSRF cookie

@@ -1,0 +1,165 @@
+name: Release
+
+# Publishes a versioned container image to GHCR and stops there. This
+# pipeline never deploys, never connects to a server, and holds no
+# credential beyond the built-in GITHUB_TOKEN — updating a running instance
+# stays a deliberate, attended action for the human operator.
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  # Manual dry run: exercises verify + gate + a (non-pushing) multi-arch
+  # build without publishing an image or creating a release, so the
+  # plumbing can be checked before the first real tag is ever pushed.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Never cancel a publish/release mid-flight — unlike ci.yml's PR churn,
+  # this only runs on a deliberate tag push (one at a time in practice).
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify tag matches declared version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is_tag: ${{ steps.version.outputs.is_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Resolve version and enforce it matches the tag
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Only an actual tag push is a real release. A manual
+          # workflow_dispatch run — even one launched against a tag ref
+          # from the Actions UI — is always treated as a dry run, so
+          # `publish`/`release` never fire outside a real tag push.
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
+            TAG="${{ github.ref_name }}"
+
+            if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "::error::Tag '$TAG' is not semver (expected vX.Y.Z)."
+              exit 1
+            fi
+            VERSION="${TAG#v}"
+
+            BACKEND_VERSION=$(grep -m1 '^version = ' backend/pyproject.toml | sed -E 's/version = "(.*)"/\1/')
+            FRONTEND_VERSION=$(grep -m1 '"version":' frontend/package.json | sed -E 's/.*"version": *"([^"]*)".*/\1/')
+
+            if [[ "$VERSION" != "$BACKEND_VERSION" ]]; then
+              echo "::error::Tag v$VERSION does not match backend/pyproject.toml (declares '$BACKEND_VERSION'). Bump and commit the version before tagging."
+              exit 1
+            fi
+            if [[ "$VERSION" != "$FRONTEND_VERSION" ]]; then
+              echo "::error::Tag v$VERSION does not match frontend/package.json (declares '$FRONTEND_VERSION'). Bump and commit the version before tagging."
+              exit 1
+            fi
+
+            echo "Tag v$VERSION matches backend/pyproject.toml and frontend/package.json."
+            echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+            echo "is_tag=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Manual dry run — no tag pushed, so publish/release are skipped."
+            echo "version=0.0.0-dryrun" >> "$GITHUB_OUTPUT"
+            echo "is_tag=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  gate:
+    name: Gate
+    needs: verify
+    uses: ./.github/workflows/gate.yml
+
+  publish:
+    name: Publish image
+    needs: [verify, gate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    env:
+      IMAGE: ghcr.io/diegogarzaro/dossier
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Required to build the linux/arm64 leg via emulation on the
+      # amd64 GitHub-hosted runner.
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Docker metadata (tags + OCI labels)
+        id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=raw,value=${{ needs.verify.outputs.version }}
+            type=raw,value=latest,enable=${{ needs.verify.outputs.is_tag == 'true' }}
+
+      # Only authenticate/push on a real tag — the dry run never touches
+      # the registry, so no new secret is exercised for nothing.
+      - name: Log in to GHCR
+        if: needs.verify.outputs.is_tag == 'true'
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image (push only on a real tag)
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: ${{ needs.verify.outputs.is_tag == 'true' }}
+          build-args: |
+            DOSSIER_VERSION=${{ needs.verify.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # The gate workflow already validated this exact build (push:
+          # false) moments ago; the shared type=gha cache makes this
+          # second, pushing build cheap.
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Attest build provenance
+        if: needs.verify.outputs.is_tag == 'true'
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-name: ${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+  release:
+    name: Create GitHub Release
+    needs: [verify, publish]
+    if: needs.verify.outputs.is_tag == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Create release
+        uses: softprops/action-gh-release@v3
+        with:
+          generate_release_notes: true

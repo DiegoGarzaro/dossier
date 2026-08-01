@@ -9,6 +9,11 @@ RUN npm run build -- --outDir dist --emptyOutDir
 
 # Stage 2 — Python runtime serving API + static bundle
 FROM python:3.12-slim AS runtime
+
+# Set by the release pipeline (--build-arg DOSSIER_VERSION=<tag>) so the running
+# container can report which build it is. Local/dev builds keep saying "dev".
+ARG DOSSIER_VERSION=dev
+
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
 WORKDIR /app
 
@@ -19,6 +24,7 @@ COPY backend/ ./
 COPY --from=web /web/dist ./app/static
 
 ENV DOSSIER_DATA_DIR=/data
+ENV DOSSIER_VERSION=$DOSSIER_VERSION
 VOLUME /data
 EXPOSE 8080
 

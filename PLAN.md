@@ -347,8 +347,21 @@
       none are to be added per SEC-9). Least-privilege `contents: read`, concurrency cancellation,
       per-job timeouts, every action pinned. `eslint` is listed in Architecture §12 but does not
       exist in the repo, so the workflow mirrors the five commands that are real — see G-46.
-      Verified locally incl. an actual `docker buildx` run for both architectures; never executed
-      on a real runner yet.
+      Verified locally incl. an actual `docker buildx` run for both architectures, then **✓ verified
+      on a real runner**: all three jobs green (backend 0m, frontend 0m, docker multi-arch 3m),
+      which also confirmed the `type=gha` cache and the QEMU/arm64 leg.
+- [x] **Release pipeline** (`.github/workflows/release.yml`) — **decision taken 2026-08-01: publish
+      only, never deploy.** A tag `vX.Y.Z` runs the shared gate (extracted into a reusable
+      `gate.yml` so CI and release can never disagree on what "green" means), then builds and
+      pushes a multi-arch image to `ghcr.io/diegogarzaro/dossier:<version>` + `:latest` with OCI
+      labels and a provenance attestation, and opens a GitHub Release. The only credential is the
+      built-in `GITHUB_TOKEN`; no secret was added. CI is deliberately **not** given access to the
+      machine holding the data — migrations run automatically on startup, so updating is an
+      attended `docker compose pull && up -d`. A `verify` job refuses a non-semver tag or one that
+      disagrees with `pyproject.toml`/`package.json`, and `workflow_dispatch` is a true dry run
+      (gate + non-pushing build, no registry, no release). The running version now surfaces on the
+      **authenticated** `/api/system/summary` and in Settings — deliberately not on the
+      unauthenticated `/api/system/health`, which would advertise the exact build to anyone.
 
 ### Security hardening
 - [x] Argon2id, CSRF, HTTP-only SameSite cookies, upload allow-list, nosniff

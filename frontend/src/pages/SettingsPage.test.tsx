@@ -32,6 +32,7 @@ function summary(overrides: Partial<SystemSummary> = {}): SystemSummary {
     uploads_bytes: 1024,
     database_bytes: 2048,
     last_backup_at: null,
+    version: '0.1.0',
     ...overrides,
   }
 }
@@ -279,5 +280,17 @@ describe('SettingsPage — data summary', () => {
     expect(screen.getByText('5')).toBeInTheDocument()
     expect(screen.getByText('9')).toBeInTheDocument()
     expect(screen.getByText('No backup taken yet')).toBeInTheDocument()
+  })
+
+  it('shows the running build version reported by the summary endpoint', async () => {
+    mockApi.mockImplementation(async (path: string) => {
+      if (path === '/api/tags') return []
+      if (path === '/api/system/summary') return summary({ version: '1.4.2' })
+      throw new Error(`Unhandled request: ${path}`)
+    })
+
+    await renderSettingsPage()
+
+    expect(await screen.findByText('Version 1.4.2')).toBeInTheDocument()
   })
 })

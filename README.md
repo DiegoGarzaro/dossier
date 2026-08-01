@@ -50,7 +50,9 @@ uv run pytest
 
 CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs this same backend gate, the
 frontend build + Vitest suite, and a multi-arch (amd64/arm64) Docker build, on every push to
-`main` and every pull request.
+`main` and every pull request. Both CI and the release pipeline call the same reusable
+[`gate.yml`](.github/workflows/gate.yml) — there is exactly one definition of "green," so a
+release can never skip the test suite.
 
 ## Production (Docker)
 
@@ -60,6 +62,41 @@ docker compose up -d
 
 Open http://localhost:8080 — the first run walks you through creating the admin
 account (no default credentials). Migrations run automatically on start.
+
+## Releases / updating
+
+Tagged versions (`vX.Y.Z`) are built and published as a multi-arch (amd64 + arm64) image to
+[`ghcr.io/diegogarzaro/dossier`](https://github.com/DiegoGarzaro/dossier/pkgs/container/dossier) —
+the same image tag works whether you're running on a Raspberry Pi or an x86 box. The release
+pipeline ([`.github/workflows/release.yml`](.github/workflows/release.yml)) only builds and
+publishes that image; it never deploys anywhere or holds any credential beyond the repo's
+built-in `GITHUB_TOKEN`, by design — updating a Dossier instance is deliberate and attended, not
+automatic.
+
+**Before updating, take an encrypted backup** (see below) — migrations run automatically on
+startup, and a backup is exactly the safety net that's for.
+
+To run a published version instead of building from source, point `docker-compose.yml` at the
+image (see the commented `image:` line in that file) and:
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+To pin to a specific version instead of floating on `latest`, set the tag explicitly:
+
+```yaml
+image: ghcr.io/diegogarzaro/dossier:1.2.3
+```
+
+The running version is visible in Settings → "Your data", and via the authenticated
+`GET /api/system/summary` endpoint — it's deliberately left off the unauthenticated
+`/api/system/health` probe.
+
+To roll back, take a backup first (see above — a rollback plus a newer schema is exactly the case
+you don't want to discover you didn't back up for), then point `docker-compose.yml` at the
+previous version tag and re-run `docker compose pull && docker compose up -d`.
 
 ## Backup & restore
 

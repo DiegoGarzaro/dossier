@@ -80,6 +80,7 @@ function DataSummaryCard() {
               ? `Last backup: ${summary.data.last_backup_at.slice(0, 10)}`
               : 'No backup taken yet'}
           </p>
+          <p className="mt-1 text-sm text-muted">Version {summary.data.version}</p>
         </>
       ) : null}
     </div>

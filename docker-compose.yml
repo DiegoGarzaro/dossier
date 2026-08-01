@@ -1,7 +1,12 @@
 services:
   dossier:
+    # Development default: build from local source.
     build: .
     image: dossier:latest
+    # To run a published release instead, comment out the two lines above
+    # and uncomment the one below (pick a version tag, or `latest`) — see
+    # "Releases / updating" in README.md for the full pull/pin/rollback flow.
+    # image: ghcr.io/diegogarzaro/dossier:latest
     ports:
       - "8080:8080"
     volumes:

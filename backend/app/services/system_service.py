@@ -55,8 +55,9 @@ class SystemService:
 
         Returns:
             SystemSummary: Counts for people/fields/documents/relationships/tags,
-                bytes used by uploads and the database file, and
-                `last_backup_at` (None until the first successful backup).
+                bytes used by uploads and the database file, `last_backup_at`
+                (None until the first successful backup), and the running
+                build's `version` (release pipeline).
         """
         settings = get_settings()
         counts = await self._system.counts()
@@ -66,4 +67,5 @@ class SystemService:
             uploads_bytes=_directory_size(settings.uploads_dir),
             database_bytes=_file_size(settings.data_dir / "app.db"),
             last_backup_at=datetime.fromisoformat(last_backup) if last_backup else None,
+            version=settings.version,
         )
