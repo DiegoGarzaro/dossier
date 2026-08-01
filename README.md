@@ -2,6 +2,8 @@
 
 > Your people, on file.
 
+[![CI](https://github.com/DiegoGarzaro/dossier/actions/workflows/ci.yml/badge.svg)](https://github.com/DiegoGarzaro/dossier/actions/workflows/ci.yml)
+
 A self-hosted, authenticated people-records vault where each person is an ID-card-style
 record: a few pinned fields shown prominently, unlimited custom fields, uploaded
 documents, and (Phase 2) links between people.
@@ -45,6 +47,10 @@ cd backend
 uv run ruff check .
 uv run pytest
 ```
+
+CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs this same backend gate, the
+frontend build + Vitest suite, and a multi-arch (amd64/arm64) Docker build, on every push to
+`main` and every pull request.
 
 ## Production (Docker)
 

@@ -335,13 +335,20 @@
 - [x] Backend: auth, people, fields, documents, relationships, vcard, tree, kinship, export,
       import, tags, backup/crypto flows (122 tests) — ✓ passing
 - [x] Frontend: Vitest + Testing Library + jsdom set up (`npm run test`); tree-layout unit tests
-      plus component tests for tags, favorites, index filters, tag rename/delete, and the SEC-7
-      mask (21) — ✓ passing
+      plus component tests for tags, favorites, index filters, tag rename/delete, encrypted
+      backup/restore, the data summary, and the SEC-7 mask (25) — ✓ passing
 - [ ] Backend: password-change flow, session expiry, photo upload validation
 - [~] Frontend: Testing Library — sensitive reveal covered (SEC-7 guard); ID-card inline edit, pin,
       drag-reorder, theme switch, and the export/import Settings flows still uncovered (G-04)
 - [ ] End-to-end acceptance checklist mapped to §13
-- [ ] CI pipeline: `ruff check`, pytest, eslint, FE build, docker build (Architecture §12)
+- [x] CI pipeline (`.github/workflows/ci.yml`): three parallel jobs on push/PR/manual — backend
+      (`uv sync`, `ruff check`, `pytest`), frontend (`npm ci`, build, vitest), and a multi-arch
+      docker build (`linux/amd64,linux/arm64`, `push: false` — no registry or credentials, and
+      none are to be added per SEC-9). Least-privilege `contents: read`, concurrency cancellation,
+      per-job timeouts, every action pinned. `eslint` is listed in Architecture §12 but does not
+      exist in the repo, so the workflow mirrors the five commands that are real — see G-46.
+      Verified locally incl. an actual `docker buildx` run for both architectures; never executed
+      on a real runner yet.
 
 ### Security hardening
 - [x] Argon2id, CSRF, HTTP-only SameSite cookies, upload allow-list, nosniff
