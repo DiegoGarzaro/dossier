@@ -368,7 +368,12 @@
 - [x] Consume `DOSSIER_TRUST_PROXY` — wired in `auth.py`/`middleware.py` (G-03, SEC-8)
 - [x] Login rate-limiting (see Epic A, G-07)
 - [ ] Security review pass before external exposure
-- [ ] Document Caddy/reverse-proxy HTTPS example (Architecture §9 / SEC-8)
+- [x] Document Caddy/reverse-proxy HTTPS example (Architecture §9 / SEC-8) — README now has a
+      "Self-hosting on your own server" section: exposure model (VPN > LAN > public internet),
+      moving an existing vault across machines, a server compose file, a Caddy + auto-TLS setup
+      that stresses `DOSSIER_TRUST_PROXY=true` (without it cookies are never `Secure`), and the
+      first-run takeover window — a fresh instance hands `/setup` to whoever reaches it first.
+      Written while actually deploying, which is also what surfaced G-47.
 
 ### Accessibility & polish (NFR-9)
 - [x] Labeled inputs, focus-visible ring, keyboard-operable dialogs

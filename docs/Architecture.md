@@ -271,7 +271,6 @@ services:
     volumes:
       - ./data:/data          # app.db + uploads (survives recreation, FR-28)
     environment:
-      - DOSSIER_SECRET_KEY=change-me       # cookie/token signing
       - DOSSIER_SESSION_IDLE_DAYS=14
       - DOSSIER_MAX_UPLOAD_MB=25
       - DOSSIER_DATA_DIR=/data

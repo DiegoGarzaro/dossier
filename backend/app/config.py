@@ -10,7 +10,6 @@ class Settings(BaseSettings):
     """Runtime settings for the application.
 
     Attributes:
-        secret_key (str): Signing key reserved for future use; must be overridden in production.
         data_dir (Path): Directory holding the SQLite database and uploaded files.
         session_idle_days (int): Idle days before a session expires (FR-4).
         max_upload_mb (int): Maximum accepted upload size in megabytes (FR-20).
@@ -26,7 +25,10 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_prefix="DOSSIER_")
 
-    secret_key: str = "dev-insecure-change-me"
+    # No signing key here on purpose: sessions are opaque server-side random
+    # tokens and CSRF is double-submit, so nothing in this app signs anything.
+    # A `secret_key` setting used to exist and was read by nothing, which only
+    # misled operators into hardening a control that didn't exist (G-47).
     data_dir: Path = Path("data")
     session_idle_days: int = 14
     max_upload_mb: int = 25

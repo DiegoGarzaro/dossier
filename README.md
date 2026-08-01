@@ -98,6 +98,105 @@ To roll back, take a backup first (see above — a rollback plus a newer schema 
 you don't want to discover you didn't back up for), then point `docker-compose.yml` at the
 previous version tag and re-run `docker compose pull && docker compose up -d`.
 
+## Self-hosting on your own server
+
+### 1. Decide how it will be reachable — this matters most
+
+Dossier holds identity documents and other people's personal data. Prefer, in this order:
+
+| Exposure | Notes |
+|---|---|
+| **VPN (e.g. Tailscale)** — recommended | Only devices on your tailnet can reach it. No ports opened on your router. `tailscale serve` also terminates TLS for you. |
+| **LAN only** | Fine at home, but without TLS the session cookie crosses your network in the clear. |
+| **Public internet** | Only with TLS (§4) and only once you're comfortable with the open items in [`ISSUES.md`](ISSUES.md). |
+
+### 2. Move an existing vault to the server
+
+**Stop the app before copying** — copying a live SQLite database can capture an inconsistent file.
+
+```bash
+# on the source machine, with the app stopped
+cd backend && tar czf dossier-data.tar.gz data/
+scp dossier-data.tar.gz you@server:~/dossier/
+
+# on the server
+cd ~/dossier && tar xzf dossier-data.tar.gz
+```
+
+That carries the database, uploads, photos **and the admin account**. Change the password after
+your first login on the server.
+
+### 3. Compose file for the server
+
+```yaml
+services:
+  dossier:
+    image: ghcr.io/diegogarzaro/dossier:0.1.0   # pin a version; don't float on latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./data:/data
+    environment:
+      - DOSSIER_SESSION_IDLE_DAYS=14
+      - DOSSIER_MAX_UPLOAD_MB=25
+      - DOSSIER_LOGIN_MAX_ATTEMPTS=5
+      - DOSSIER_LOGIN_LOCKOUT_MINUTES=15
+    restart: unless-stopped
+```
+
+```bash
+docker compose up -d && docker compose logs -f
+```
+
+The lockout settings are worth a thought: 5 attempts / 15 minutes is sensible for an
+internet-facing service, but on a single-user vault the only person it ever locks out is you.
+
+### 4. HTTPS with Caddy
+
+Without TLS your password and session cookie travel in clear text. Caddy obtains and renews a
+Let's Encrypt certificate on its own:
+
+```yaml
+services:
+  dossier:
+    image: ghcr.io/diegogarzaro/dossier:0.1.0
+    volumes:
+      - ./data:/data
+    environment:
+      - DOSSIER_TRUST_PROXY=true    # without this, cookies are never marked Secure
+    restart: unless-stopped
+    # no ports: — only Caddy reaches the app
+
+  caddy:
+    image: caddy:2
+    ports: ["80:80", "443:443"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+    restart: unless-stopped
+
+volumes:
+  caddy_data:
+```
+
+`Caddyfile`:
+
+```
+dossier.example.com {
+    reverse_proxy dossier:8080
+}
+```
+
+`DOSSIER_TRUST_PROXY=true` is not optional here (SEC-8): the app receives plain HTTP from the
+proxy, so without it the session and CSRF cookies are never flagged `Secure`.
+
+### 5. Don't leave first-run setup open
+
+A fresh instance with no data has nobody registered, and **whoever reaches `/setup` first becomes
+the admin** (FR-5 only refuses *after* someone has). On anything reachable beyond your own machine
+that is an account-takeover window. Either restore an existing vault (§2, already initialised), or
+complete setup before opening any port.
+
 ## Backup & restore
 
 There are two ways to back up a vault. Use the encrypted backup for the data you actually
