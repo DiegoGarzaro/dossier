@@ -11,6 +11,7 @@ import type { PersonDetail, PersonSummary } from '../lib/types'
 
 export function PeopleIndex() {
   const [query, setQuery] = useState('')
+  const [searchFields, setSearchFields] = useState(false)
   const deferredQuery = useDeferredValue(query)
   const [adding, setAdding] = useState(false)
   const [newName, setNewName] = useState('')
@@ -18,9 +19,14 @@ export function PeopleIndex() {
   const queryClient = useQueryClient()
 
   const people = useQuery({
-    queryKey: ['people', deferredQuery],
-    queryFn: () =>
-      api<PersonSummary[]>(`/api/people${deferredQuery ? `?q=${encodeURIComponent(deferredQuery)}` : ''}`),
+    queryKey: ['people', deferredQuery, searchFields],
+    queryFn: () => {
+      const params = new URLSearchParams()
+      if (deferredQuery) params.set('q', deferredQuery)
+      if (searchFields) params.set('fields', 'true')
+      const suffix = params.toString()
+      return api<PersonSummary[]>(`/api/people${suffix ? `?${suffix}` : ''}`)
+    },
   })
 
   const create = useMutation({
@@ -42,15 +48,26 @@ export function PeopleIndex() {
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="font-display text-3xl font-semibold">People</h1>
         <div className="flex-1" />
-        <div className="relative">
-          <Search size={16} className="absolute top-1/2 left-3 -translate-y-1/2 text-subtle" aria-hidden />
-          <Input
-            aria-label="Search people by name"
-            placeholder="Search…"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="w-56 pl-9"
-          />
+        <div className="flex flex-col items-end gap-1">
+          <div className="relative">
+            <Search size={16} className="absolute top-1/2 left-3 -translate-y-1/2 text-subtle" aria-hidden />
+            <Input
+              aria-label={searchFields ? 'Search people by name or field value' : 'Search people by name'}
+              placeholder={searchFields ? 'Search name & fields…' : 'Search…'}
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="w-56 pl-9"
+            />
+          </div>
+          <label className="flex items-center gap-1.5 pr-1 text-xs text-muted select-none">
+            <input
+              type="checkbox"
+              checked={searchFields}
+              onChange={(event) => setSearchFields(event.target.checked)}
+              className="accent-accent"
+            />
+            Search field values too
+          </label>
         </div>
         <Button onClick={() => setAdding(true)}>
           <Plus size={16} aria-hidden /> Add person
@@ -81,6 +98,11 @@ export function PeopleIndex() {
                   {person.pinned_fields.map((field) => (
                     <p key={field.id} className="truncate text-sm text-muted">
                       {field.value}
+                    </p>
+                  ))}
+                  {person.matched_fields?.map((field) => (
+                    <p key={`m-${field.id}`} className="truncate text-sm text-accent">
+                      <span className="text-subtle">{field.label}:</span> {field.value}
                     </p>
                   ))}
                 </div>

@@ -13,11 +13,17 @@ from app.repositories.people_repo import PeopleRepository
 from app.schemas.field import FieldCreate, FieldUpdate, ReorderRequest
 
 
-def validate_value(field_type: FieldType, value: str | None) -> None:
+def validate_value(field_type: FieldType | str, value: str | None) -> None:
     """Validate a field value against its declared type (FR-14).
 
+    Compares with `==`, not `is`: the `type` column is a plain `String`, so a
+    field loaded from the database carries a `str` rather than a `FieldType`
+    member. Identity checks silently matched nothing there, which let invalid
+    values through on update (G-37).
+
     Args:
-        field_type (FieldType): The field's type.
+        field_type (FieldType | str): The field's type, as an enum member or
+            its stored string value.
         value (str | None): The candidate value; empty values are always allowed.
 
     Returns:
@@ -28,19 +34,19 @@ def validate_value(field_type: FieldType, value: str | None) -> None:
     """
     if value is None or value == "":
         return
-    if field_type is FieldType.number:
+    if field_type == FieldType.number:
         try:
             parsed = float(value)
         except ValueError:
             raise InvalidInputError("Value must be a number") from None
         if not math.isfinite(parsed):
             raise InvalidInputError("Value must be a finite number")
-    elif field_type is FieldType.date:
+    elif field_type == FieldType.date:
         try:
             date.fromisoformat(value)
         except ValueError:
             raise InvalidInputError("Value must be an ISO date (YYYY-MM-DD)") from None
-    elif field_type is FieldType.boolean and value not in ("true", "false"):
+    elif field_type == FieldType.boolean and value not in ("true", "false"):
         raise InvalidInputError("Value must be 'true' or 'false'")
 
 

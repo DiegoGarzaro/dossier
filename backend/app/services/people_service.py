@@ -8,14 +8,22 @@ from fastapi import UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.core.enums import FieldType
 from app.core.errors import NotFoundError, PayloadTooLargeError
 from app.core.files import ALLOWED_DOCUMENT_TYPES, IMAGE_TYPES, sniff_mime
 from app.models import Person, PersonField
 from app.repositories.people_repo import PeopleRepository
 from app.schemas.person import PersonCreate, PersonUpdate
 
-# Fields suggested on creation, matching the reference mockup (FR-17).
-DEFAULT_PINNED_LABELS = ("Document number", "Address", "Nationality")
+# Fields seeded on creation as pinned system fields (FR-17). Order is the
+# order they appear in the card header. Date of birth is `date`-typed so it
+# gets FR-14 validation for free; the rest are plain text.
+DEFAULT_SYSTEM_FIELDS: tuple[tuple[str, FieldType], ...] = (
+    ("Document number", FieldType.text),
+    ("Date of birth", FieldType.date),
+    ("Address", FieldType.text),
+    ("Nationality", FieldType.text),
+)
 
 _IMAGE_ALLOWED = {
     mime: spec for mime, spec in ALLOWED_DOCUMENT_TYPES.items() if mime in IMAGE_TYPES
@@ -33,16 +41,18 @@ class PeopleService:
         """
         self._people = PeopleRepository(session)
 
-    async def list(self, query: str | None = None) -> list[Person]:
-        """List people for the index grid, optionally filtered by name (FR-10/26).
+    async def list(self, query: str | None = None, include_fields: bool = False) -> list[Person]:
+        """List people for the index grid, optionally searching field values (FR-10/26/27).
 
         Args:
-            query (str | None): Optional name search.
+            query (str | None): Optional name (or field-value) search.
+            include_fields (bool): Widen the search to non-sensitive field
+                values as well as the name (SEC-7 keeps sensitive out).
 
         Returns:
             list[Person]: People ordered by name with fields loaded.
         """
-        return await self._people.list(query)
+        return await self._people.list(query, include_fields=include_fields)
 
     async def create(self, data: PersonCreate) -> Person:
         """Create a person with pre-populated empty pinned fields (FR-6/17).
@@ -55,8 +65,15 @@ class PeopleService:
         """
         person = Person(full_name=data.full_name)
         person.fields = [
-            PersonField(label=label, value=None, is_pinned=True, is_system=True, position=index)
-            for index, label in enumerate(DEFAULT_PINNED_LABELS)
+            PersonField(
+                label=label,
+                value=None,
+                type=field_type,
+                is_pinned=True,
+                is_system=True,
+                position=index,
+            )
+            for index, (label, field_type) in enumerate(DEFAULT_SYSTEM_FIELDS)
         ]
         return await self._people.add(person)
 

@@ -29,6 +29,10 @@ class PersonSummary(BaseModel):
     has_photo: bool
     updated_at: datetime
     pinned_fields: list[FieldOut]
+    # Non-sensitive fields whose value matched a field-value search (FR-27),
+    # shown on the card so the user sees why the person appeared. Empty when
+    # not searching fields or when the match came only from the name.
+    matched_fields: list[FieldOut] = []
 
 
 class PersonDetail(BaseModel):

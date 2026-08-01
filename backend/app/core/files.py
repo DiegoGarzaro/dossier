@@ -1,5 +1,6 @@
 """Upload validation helpers — allow-list + magic-byte sniffing (SEC-6, FR-18)."""
 
+import re
 from pathlib import Path
 
 from app.core.errors import InvalidInputError
@@ -52,3 +53,21 @@ def sanitize_filename(filename: str) -> str:
     """
     name = Path(filename).name.strip()
     return name or "upload"
+
+
+def download_filename(name: str, suffix: str, fallback: str = "download") -> str:
+    """Build an ASCII-only download filename safe for a Content-Disposition header.
+
+    Anything outside `[A-Za-z0-9._-]` collapses to a hyphen, so a person's
+    name can never inject quotes, newlines, or header separators.
+
+    Args:
+        name (str): The human name to base the filename on.
+        suffix (str): The extension to append, including the dot (e.g. ".json").
+        fallback (str): Stem to use when `name` has no usable characters.
+
+    Returns:
+        str: The sanitized filename, e.g. "Jane-Doe.json".
+    """
+    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", name).strip("-")
+    return f"{slug or fallback}{suffix}"

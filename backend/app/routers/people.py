@@ -5,7 +5,7 @@ from fastapi.responses import FileResponse, Response
 
 from app.core.enums import FieldType
 from app.deps import CurrentUser, DbSession
-from app.models import Person
+from app.models import Person, PersonField
 from app.schemas.field import FieldOut
 from app.schemas.person import PersonCreate, PersonDetail, PersonSummary, PersonUpdate
 from app.schemas.relationship import RelationshipOut, TreeOut
@@ -16,28 +16,38 @@ from app.services.vcard_service import VCardService
 router = APIRouter(prefix="/people", tags=["people"])
 
 
-def _summary(person: Person) -> PersonSummary:
+def _summary(person: Person, match_query: str | None = None) -> PersonSummary:
     """Build a grid entry from a person with loaded fields.
 
     Args:
         person (Person): The person with fields eagerly loaded.
+        match_query (str | None): When set (field-value search), the fields
+            whose value contains this substring are surfaced as `matched_fields`
+            so the card can show why the person appeared. Sensitive fields are
+            never considered (SEC-7).
 
     Returns:
         PersonSummary: The index-grid representation.
     """
     # Sensitive values are masked-by-default in the UI (SEC-7); the grid
     # preview has no reveal control, so they are excluded entirely.
-    pinned = [
+    visible = [
         field
         for field in person.fields
-        if field.is_pinned and field.value and field.type != FieldType.sensitive
+        if field.value and field.type != FieldType.sensitive
     ]
+    pinned = [field for field in visible if field.is_pinned]
+    matched: list[PersonField] = []
+    if match_query:
+        needle = match_query.lower()
+        matched = [field for field in visible if needle in (field.value or "").lower()]
     return PersonSummary(
         id=person.id,
         full_name=person.full_name,
         has_photo=person.photo_path is not None,
         updated_at=person.updated_at,
         pinned_fields=[FieldOut.model_validate(field) for field in pinned[:2]],
+        matched_fields=[FieldOut.model_validate(field) for field in matched[:3]],
     )
 
 
@@ -58,9 +68,16 @@ def _detail(person: Person, relationships: list[RelationshipOut]) -> PersonDetai
 
 
 @router.get("", response_model=list[PersonSummary])
-async def list_people(_: CurrentUser, db: DbSession, q: str | None = None) -> list[PersonSummary]:
-    """List people for the index grid, optionally filtered by name (FR-10/26)."""
-    return [_summary(person) for person in await PeopleService(db).list(q)]
+async def list_people(
+    _: CurrentUser, db: DbSession, q: str | None = None, fields: bool = False
+) -> list[PersonSummary]:
+    """List people for the index grid; `fields=true` also searches field values (FR-10/26/27).
+
+    Sensitive field values are excluded from the search and never surfaced (SEC-7).
+    """
+    people = await PeopleService(db).list(q, include_fields=fields)
+    match_query = q if fields else None
+    return [_summary(person, match_query) for person in people]
 
 
 @router.post("", response_model=PersonDetail, status_code=201)

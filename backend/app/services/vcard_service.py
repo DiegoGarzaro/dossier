@@ -6,18 +6,40 @@ Sensitive field values are never included (SEC-7) — this file is meant to
 leave the app and land in phone/desktop contact books.
 """
 
-import re
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import FieldType
+from app.core.files import download_filename
 from app.models import Person
 from app.schemas.relationship import RelationshipOut
 from app.services.people_service import PeopleService
 from app.services.relationship_service import RelationshipService
 
-# RFC 6350 §6.6.6 TYPE values our RelationshipType labels map to 1:1.
-_STANDARD_RELATED_TYPES = {"spouse", "parent", "child", "sibling"}
+# Relationship labels (types and gendered roles, G-31) mapped to RFC 6350
+# §6.6.6 RELATED TYPE values; unmapped labels emit RELATED without a TYPE.
+_RELATED_TYPE_BY_LABEL = {
+    "spouse": "spouse",
+    "husband": "spouse",
+    "wife": "spouse",
+    "partner": "sweetheart",
+    "parent": "parent",
+    "father": "parent",
+    "mother": "parent",
+    "child": "child",
+    "son": "child",
+    "daughter": "child",
+    "sibling": "sibling",
+    "brother": "sibling",
+    "sister": "sibling",
+    "friend": "friend",
+    "colleague": "colleague",
+    "godparent": "kin",
+    "godfather": "kin",
+    "godmother": "kin",
+    "godchild": "kin",
+    "godson": "kin",
+    "goddaughter": "kin",
+}
 
 
 def _escape(value: str) -> str:
@@ -35,19 +57,6 @@ def _escape(value: str) -> str:
         .replace(";", "\\;")
         .replace("\n", "\\n")
     )
-
-
-def _safe_filename(full_name: str) -> str:
-    """Build a header-injection-safe .vcf filename from a person's name.
-
-    Args:
-        full_name (str): The person's display name.
-
-    Returns:
-        str: An ASCII-only filename ending in .vcf.
-    """
-    slug = re.sub(r"[^A-Za-z0-9._-]+", "-", full_name).strip("-")
-    return f"{slug or 'contact'}.vcf"
 
 
 def _render(person: Person, relationships: list[RelationshipOut]) -> str:
@@ -91,8 +100,8 @@ def _render(person: Person, relationships: list[RelationshipOut]) -> str:
             notes.append(f"{field.label}: {display_value}")
 
     for relationship in relationships:
-        related_type = relationship.label.lower()
-        type_param = f";TYPE={related_type}" if related_type in _STANDARD_RELATED_TYPES else ""
+        related_type = _RELATED_TYPE_BY_LABEL.get(relationship.label.lower())
+        type_param = f";TYPE={related_type}" if related_type else ""
         lines.append(f"RELATED{type_param}:{_escape(relationship.person_name)}")
 
     if notes:
@@ -128,4 +137,5 @@ class VCardService:
         """
         person = await self._people.get_detail(person_id)
         relationships = await self._relationships.list_for_person(person_id)
-        return _render(person, relationships), _safe_filename(person.full_name)
+        filename = download_filename(person.full_name, ".vcf", fallback="contact")
+        return _render(person, relationships), filename

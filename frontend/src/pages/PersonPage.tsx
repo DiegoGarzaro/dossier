@@ -6,6 +6,7 @@ import {
   Check,
   Contact,
   Download,
+  FileJson,
   FileText,
   Pencil,
   Plus,
@@ -537,12 +538,20 @@ export function PersonPage() {
       </div>
 
       <div className="flex items-center justify-between">
-        <a
-          href={`/api/people/${detail.id}/vcard`}
-          className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:bg-surface-hover"
-        >
-          <Contact size={14} aria-hidden /> Export vCard
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href={`/api/people/${detail.id}/vcard`}
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:bg-surface-hover"
+          >
+            <Contact size={14} aria-hidden /> Export vCard
+          </a>
+          <a
+            href={`/api/people/${detail.id}/export`}
+            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:bg-surface-hover"
+          >
+            <FileJson size={14} aria-hidden /> Export JSON
+          </a>
+        </div>
         <Button variant="danger" size="sm" onClick={() => setConfirmingDelete(true)}>
           <Trash2 size={14} aria-hidden /> Delete person
         </Button>

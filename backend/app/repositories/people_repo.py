@@ -1,10 +1,11 @@
 """Async data access for people."""
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models import Person
+from app.core.enums import FieldType
+from app.models import Person, PersonField
 
 
 class PeopleRepository:
@@ -18,11 +19,35 @@ class PeopleRepository:
         """
         self._session = session
 
-    async def list(self, query: str | None = None) -> list[Person]:
-        """List people, optionally filtered by a name search (FR-10/26).
+    async def list_with_details(self) -> list[Person]:
+        """List every person with fields and documents eagerly loaded (FR-30).
+
+        Used by the whole-dataset JSON export, which needs the full record for
+        each person rather than the index-grid subset.
+
+        Note: defined before `list()` because, once that method is bound in the
+        class namespace, `list[...]` annotations below it resolve to the method
+        instead of the builtin.
+
+        Returns:
+            list[Person]: All people ordered by name, fully loaded.
+        """
+        result = await self._session.execute(
+            select(Person)
+            .options(selectinload(Person.fields), selectinload(Person.documents))
+            .order_by(Person.full_name)
+        )
+        return list(result.scalars().all())
+
+    async def list(self, query: str | None = None, include_fields: bool = False) -> list[Person]:
+        """List people, optionally filtered by name or field-value search (FR-10/26/27).
 
         Args:
-            query (str | None): Case-insensitive substring to match against full_name.
+            query (str | None): Case-insensitive substring to match. `%`/`_`
+                are treated literally (escaped), so a query is a plain substring.
+            include_fields (bool): When True, also match against custom field
+                values. `sensitive`-type values are always excluded from the
+                search so secrets stay unindexed (SEC-7).
 
         Returns:
             list[Person]: People ordered by name, with fields eagerly loaded.
@@ -30,7 +55,22 @@ class PeopleRepository:
         stmt = select(Person).options(selectinload(Person.fields)).order_by(Person.full_name)
         if query:
             escaped = query.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-            stmt = stmt.where(Person.full_name.ilike(f"%{escaped}%", escape="\\"))
+            pattern = f"%{escaped}%"
+            name_match = Person.full_name.ilike(pattern, escape="\\")
+            if include_fields:
+                # Correlated EXISTS over non-sensitive field values only (SEC-7).
+                field_match = (
+                    select(PersonField.id)
+                    .where(
+                        PersonField.person_id == Person.id,
+                        PersonField.type != FieldType.sensitive,
+                        PersonField.value.ilike(pattern, escape="\\"),
+                    )
+                    .exists()
+                )
+                stmt = stmt.where(or_(name_match, field_match))
+            else:
+                stmt = stmt.where(name_match)
         result = await self._session.execute(stmt)
         return list(result.scalars().all())
 
@@ -44,6 +84,20 @@ class PeopleRepository:
             Person | None: The person, or None if not found.
         """
         return await self._session.get(Person, person_id)
+
+    async def get_by_name(self, full_name: str) -> Person | None:
+        """Fetch a person by their exact name (used to de-duplicate imports).
+
+        Args:
+            full_name (str): The exact name to match.
+
+        Returns:
+            Person | None: The first person with that name, or None.
+        """
+        result = await self._session.execute(
+            select(Person).where(Person.full_name == full_name).limit(1)
+        )
+        return result.scalar_one_or_none()
 
     async def get_with_details(self, person_id: int) -> Person | None:
         """Fetch a person with fields and documents eagerly loaded (FR-7).
