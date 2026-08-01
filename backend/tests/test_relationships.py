@@ -157,6 +157,115 @@ async def test_related_person_not_found(authed_client: AsyncClient) -> None:
     await authed_client.delete(f"/api/people/{alice['id']}")
 
 
+async def test_role_specific_label_with_generic_inverse(authed_client: AsyncClient) -> None:
+    """A gendered role (Mother) labels the counterpart; the unknown side stays generic (G-31)."""
+    mom = await _create_person(authed_client, "Maria Role")
+    kid = await _create_person(authed_client, "Kid Role")
+
+    # From the kid's card: "Maria is my mother".
+    created = await authed_client.post(
+        "/api/relationships",
+        json={
+            "person_id": kid["id"],
+            "related_person_id": mom["id"],
+            "type": "parent",
+            "related_role": "mother",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["label"] == "Mother"
+
+    kid_detail = (await authed_client.get(f"/api/people/{kid['id']}")).json()
+    mom_detail = (await authed_client.get(f"/api/people/{mom['id']}")).json()
+    assert kid_detail["relationships"][0]["label"] == "Mother"
+    # The kid's own role was never stated, so the mother sees the generic label.
+    assert mom_detail["relationships"][0]["label"] == "Child"
+
+    for person in (mom, kid):
+        await authed_client.delete(f"/api/people/{person['id']}")
+
+
+async def test_role_must_match_type(authed_client: AsyncClient) -> None:
+    """A role that contradicts the chosen type is rejected (G-31)."""
+    alice = await _create_person(authed_client, "Alice Mismatch")
+    bob = await _create_person(authed_client, "Bob Mismatch")
+
+    response = await authed_client.post(
+        "/api/relationships",
+        json={
+            "person_id": alice["id"],
+            "related_person_id": bob["id"],
+            "type": "spouse",
+            "related_role": "mother",
+        },
+    )
+    assert response.status_code == 400
+
+    for person in (alice, bob):
+        await authed_client.delete(f"/api/people/{person['id']}")
+
+
+async def test_godchild_canonicalizes_to_godparent(authed_client: AsyncClient) -> None:
+    """godchild stores as a godparent row; the reverse duplicate is caught (G-31)."""
+    godmother = await _create_person(authed_client, "Godmother Canon")
+    kid = await _create_person(authed_client, "Godkid Canon")
+
+    # From the godmother's card: "kid is my goddaughter".
+    created = await authed_client.post(
+        "/api/relationships",
+        json={
+            "person_id": godmother["id"],
+            "related_person_id": kid["id"],
+            "type": "godchild",
+            "related_role": "goddaughter",
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["label"] == "Goddaughter"
+
+    kid_detail = (await authed_client.get(f"/api/people/{kid['id']}")).json()
+    assert kid_detail["relationships"][0]["label"] == "Godparent"
+
+    # Linking again from the kid's side is the same stored relationship.
+    duplicate = await authed_client.post(
+        "/api/relationships",
+        json={
+            "person_id": kid["id"],
+            "related_person_id": godmother["id"],
+            "type": "godparent",
+        },
+    )
+    assert duplicate.status_code == 409
+
+    for person in (godmother, kid):
+        await authed_client.delete(f"/api/people/{person['id']}")
+
+
+async def test_friend_relationship_symmetric(authed_client: AsyncClient) -> None:
+    """New social categories (friend) are symmetric like spouse (G-31)."""
+    alice = await _create_person(authed_client, "Alice Friend")
+    bob = await _create_person(authed_client, "Bob Friend")
+
+    created = await authed_client.post(
+        "/api/relationships",
+        json={"person_id": alice["id"], "related_person_id": bob["id"], "type": "friend"},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["label"] == "Friend"
+
+    bob_detail = (await authed_client.get(f"/api/people/{bob['id']}")).json()
+    assert bob_detail["relationships"][0]["label"] == "Friend"
+
+    reversed_dup = await authed_client.post(
+        "/api/relationships",
+        json={"person_id": bob["id"], "related_person_id": alice["id"], "type": "friend"},
+    )
+    assert reversed_dup.status_code == 409
+
+    for person in (alice, bob):
+        await authed_client.delete(f"/api/people/{person['id']}")
+
+
 async def test_remove_relationship_from_either_side(authed_client: AsyncClient) -> None:
     """Deleting a relationship removes it from both people's records (FR-25)."""
     alice = await _create_person(authed_client, "Alice Remove")

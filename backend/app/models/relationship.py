@@ -33,6 +33,10 @@ class Relationship(Base):
     person_b_id: Mapped[int] = mapped_column(ForeignKey("people.id", ondelete="CASCADE"))
     type: Mapped[RelationshipType] = mapped_column(String(20))
     custom_label: Mapped[str | None] = mapped_column(String(255), default=None)
+    # Optional gendered role per side (RelationshipRole values, e.g. "mother"
+    # on the parent side of a parent row) — G-31. Validated in the service.
+    role_a: Mapped[str | None] = mapped_column(String(20), default=None)
+    role_b: Mapped[str | None] = mapped_column(String(20), default=None)
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
     person_a: Mapped["Person"] = relationship(foreign_keys=[person_a_id], lazy="joined")

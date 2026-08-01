@@ -6,16 +6,73 @@ import { type FormEvent, useDeferredValue, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 import { api } from '../lib/api'
-import type { PersonSummary, RelationshipOut, RelationshipType } from '../lib/types'
+import type {
+  PersonSummary,
+  RelationshipOut,
+  RelationshipRole,
+  RelationshipType,
+} from '../lib/types'
 import { Avatar, Button, Dialog, Input, SectionHeading } from './ui'
 
-const RELATIONSHIP_TYPES: { value: RelationshipType; label: string }[] = [
-  { value: 'spouse', label: 'Spouse' },
-  { value: 'parent', label: 'Parent' },
-  { value: 'child', label: 'Child' },
-  { value: 'sibling', label: 'Sibling' },
-  { value: 'custom', label: 'Custom…' },
+/** What the related person is *to* this card's person; a role implies its type (G-31). */
+interface RelationshipOption {
+  value: string
+  label: string
+  type: RelationshipType
+  role?: RelationshipRole
+}
+
+const RELATIONSHIP_GROUPS: { group: string; options: RelationshipOption[] }[] = [
+  {
+    group: 'Family',
+    options: [
+      { value: 'mother', label: 'Mother', type: 'parent', role: 'mother' },
+      { value: 'father', label: 'Father', type: 'parent', role: 'father' },
+      { value: 'parent', label: 'Parent', type: 'parent' },
+      { value: 'daughter', label: 'Daughter', type: 'child', role: 'daughter' },
+      { value: 'son', label: 'Son', type: 'child', role: 'son' },
+      { value: 'child', label: 'Child', type: 'child' },
+      { value: 'sister', label: 'Sister', type: 'sibling', role: 'sister' },
+      { value: 'brother', label: 'Brother', type: 'sibling', role: 'brother' },
+      { value: 'sibling', label: 'Sibling', type: 'sibling' },
+    ],
+  },
+  {
+    group: 'Partners',
+    options: [
+      { value: 'wife', label: 'Wife', type: 'spouse', role: 'wife' },
+      { value: 'husband', label: 'Husband', type: 'spouse', role: 'husband' },
+      { value: 'spouse', label: 'Spouse', type: 'spouse' },
+      { value: 'partner', label: 'Partner', type: 'partner' },
+    ],
+  },
+  {
+    group: 'Godfamily',
+    options: [
+      { value: 'godmother', label: 'Godmother', type: 'godparent', role: 'godmother' },
+      { value: 'godfather', label: 'Godfather', type: 'godparent', role: 'godfather' },
+      { value: 'godparent', label: 'Godparent', type: 'godparent' },
+      { value: 'goddaughter', label: 'Goddaughter', type: 'godchild', role: 'goddaughter' },
+      { value: 'godson', label: 'Godson', type: 'godchild', role: 'godson' },
+      { value: 'godchild', label: 'Godchild', type: 'godchild' },
+    ],
+  },
+  {
+    group: 'Social',
+    options: [
+      { value: 'friend', label: 'Friend', type: 'friend' },
+      { value: 'colleague', label: 'Colleague', type: 'colleague' },
+    ],
+  },
+  {
+    group: 'Other',
+    options: [{ value: 'custom', label: 'Custom…', type: 'custom' }],
+  },
 ]
+
+const OPTIONS_BY_VALUE = new Map(
+  RELATIONSHIP_GROUPS.flatMap((entry) => entry.options).map((option) => [option.value, option]),
+)
 
 function groupByLabel(relationships: RelationshipOut[]): [string, RelationshipOut[]][] {
   const groups = new Map<string, RelationshipOut[]>()
@@ -60,7 +117,7 @@ function RelationshipChip({
 function AddRelationshipDialog({ personId, onClose }: { personId: number; onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState<PersonSummary | null>(null)
-  const [type, setType] = useState<RelationshipType>('spouse')
+  const [choice, setChoice] = useState('spouse')
   const [customLabel, setCustomLabel] = useState('')
   const [error, setError] = useState<string | null>(null)
   const queryClient = useQueryClient()
@@ -72,6 +129,8 @@ function AddRelationshipDialog({ personId, onClose }: { personId: number; onClos
     enabled: deferredQuery.trim().length > 0,
   })
 
+  const option = OPTIONS_BY_VALUE.get(choice)!
+
   const create = useMutation({
     mutationFn: () =>
       api<RelationshipOut>('/api/relationships', {
@@ -79,8 +138,9 @@ function AddRelationshipDialog({ personId, onClose }: { personId: number; onClos
         body: {
           person_id: personId,
           related_person_id: selected?.id,
-          type,
-          custom_label: type === 'custom' ? customLabel : undefined,
+          type: option.type,
+          related_role: option.role,
+          custom_label: option.type === 'custom' ? customLabel : undefined,
         },
       }),
     onSuccess: () => {
@@ -146,18 +206,22 @@ function AddRelationshipDialog({ personId, onClose }: { personId: number; onClos
           <select
             id="relationship-type"
             className="h-10 w-full rounded-sm border border-border bg-surface px-3 text-sm focus:border-accent"
-            value={type}
-            onChange={(event) => setType(event.target.value as RelationshipType)}
+            value={choice}
+            onChange={(event) => setChoice(event.target.value)}
           >
-            {RELATIONSHIP_TYPES.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
+            {RELATIONSHIP_GROUPS.map((group) => (
+              <optgroup key={group.group} label={group.group}>
+                {group.options.map((entry) => (
+                  <option key={entry.value} value={entry.value}>
+                    {entry.label}
+                  </option>
+                ))}
+              </optgroup>
             ))}
           </select>
         </div>
 
-        {type === 'custom' && (
+        {option.type === 'custom' && (
           <Input
             id="relationship-custom-label"
             label="Label"
@@ -180,7 +244,9 @@ function AddRelationshipDialog({ personId, onClose }: { personId: number; onClos
           </Button>
           <Button
             type="submit"
-            disabled={!selected || create.isPending || (type === 'custom' && !customLabel.trim())}
+            disabled={
+              !selected || create.isPending || (option.type === 'custom' && !customLabel.trim())
+            }
           >
             Add
           </Button>

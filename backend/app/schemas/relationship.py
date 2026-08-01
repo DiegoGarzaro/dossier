@@ -2,19 +2,23 @@
 
 from pydantic import BaseModel, Field
 
-from app.core.enums import RelationshipType
+from app.core.enums import RelationshipRole, RelationshipType
 
 
 class RelationshipCreate(BaseModel):
     """Create a relationship as seen from `person_id`'s perspective (FR-22).
 
     `type` describes what `related_person_id` is *to* `person_id` — e.g.
-    `type="parent"` means "the related person is my parent".
+    `type="parent"` means "the related person is my parent". `related_role`
+    optionally genders the related person's side of the link (e.g.
+    `type="parent", related_role="mother"` means "she is my mother") and
+    must refine the given type (G-31).
     """
 
     person_id: int
     related_person_id: int
     type: RelationshipType
+    related_role: RelationshipRole | None = None
     custom_label: str | None = Field(default=None, max_length=255)
 
 
@@ -32,13 +36,17 @@ class TreeNode(BaseModel):
     """One person in the relationship tree, placed by generation (Phase 2b).
 
     `generation` is relative to the center person: negative values are older
-    generations (parents at -1), positive are younger (children at +1);
-    spouse/sibling/custom links keep both people in the same generation.
+    generations (parents and godparents at -1), positive are younger
+    (children at +1); all other links keep both people in the same
+    generation. `kinship` is the derived relationship to the center person
+    ("Mother", "Uncle", "Sister-in-law", …) or None when the connection has
+    no common name (G-31).
     """
 
     id: int
     full_name: str
     generation: int
+    kinship: str | None = None
 
 
 class TreeEdge(BaseModel):
