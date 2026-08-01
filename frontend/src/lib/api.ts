@@ -50,3 +50,39 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   if (response.status === 204) return undefined as T
   return (await response.json()) as T
 }
+
+interface ApiBlobOptions {
+  method?: 'GET' | 'POST'
+  body?: unknown
+}
+
+/** Like `api()` but for binary responses (e.g. the encrypted backup
+ * download): same CSRF header and same-origin credentials, same `ApiError`
+ * handling, but returns a `Blob` instead of parsing JSON. A sibling rather
+ * than a shared code path so `api()`'s existing behaviour is untouched. */
+export async function apiBlob(path: string, options: ApiBlobOptions = {}): Promise<Blob> {
+  const { method = 'POST', body } = options
+  const headers: Record<string, string> = {
+    'X-CSRF-Token': getCookie('dossier_csrf') ?? '',
+  }
+  if (body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+  }
+  const response = await fetch(path, {
+    method,
+    headers,
+    credentials: 'same-origin',
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  })
+  if (!response.ok) {
+    let detail = response.statusText
+    try {
+      const data = await response.json()
+      if (typeof data.detail === 'string') detail = data.detail
+    } catch {
+      /* non-JSON error body */
+    }
+    throw new ApiError(response.status, detail)
+  }
+  return response.blob()
+}

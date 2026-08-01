@@ -10,6 +10,21 @@ from app.services.import_service import ImportService
 
 router = APIRouter(tags=["export"])
 
+# `ExportDocument.storage_path` / `ExportPerson.photo_path` exist on the model
+# so `BackupService` can populate and round-trip them through the very same
+# schema (G-36). The **plain** JSON export never sets them (SEC-6) — and,
+# since a `None`-valued field still serializes as a `null` key by default,
+# they are also excluded from the wire payload here so the key itself never
+# appears, not just the value.
+_PLAIN_EXPORT_EXCLUDE = {
+    "people": {
+        "__all__": {
+            "photo_path": True,
+            "documents": {"__all__": {"storage_path": True}},
+        }
+    }
+}
+
 
 def _download(envelope: ExportEnvelope, filename: str) -> Response:
     """Shape an export envelope as a JSON file download.
@@ -22,7 +37,7 @@ def _download(envelope: ExportEnvelope, filename: str) -> Response:
         Response: An attachment response with nosniff and no-store headers.
     """
     return Response(
-        content=envelope.model_dump_json(indent=2),
+        content=envelope.model_dump_json(indent=2, exclude=_PLAIN_EXPORT_EXCLUDE),
         media_type="application/json",
         headers={
             "Content-Disposition": f'attachment; filename="{filename}"',

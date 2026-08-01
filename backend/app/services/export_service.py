@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.enums import FieldType
 from app.core.files import download_filename
-from app.models import Person, PersonField, Relationship
+from app.models import Document, Person, PersonField, Relationship
 from app.models.base import utcnow
 from app.repositories.people_repo import PeopleRepository
 from app.repositories.relationship_repo import RelationshipRepository
@@ -53,12 +53,39 @@ def _field(field: PersonField, include_sensitive: bool) -> ExportField:
     )
 
 
-def _person(person: Person, include_sensitive: bool) -> ExportPerson:
+def _document(document: Document, include_storage_paths: bool) -> ExportDocument:
+    """Convert stored document metadata, optionally including its storage path.
+
+    Args:
+        document (Document): The stored document.
+        include_storage_paths (bool): Whether to include the on-disk random
+            filename (SEC-6) — only true for an encrypted backup archive.
+
+    Returns:
+        ExportDocument: The exportable document metadata.
+    """
+    return ExportDocument(
+        title=document.title,
+        original_filename=document.original_filename,
+        mime_type=document.mime_type,
+        size_bytes=document.size_bytes,
+        uploaded_at=document.uploaded_at,
+        storage_path=document.storage_path if include_storage_paths else None,
+    )
+
+
+def _person(
+    person: Person, include_sensitive: bool, include_storage_paths: bool = False
+) -> ExportPerson:
     """Convert a person with their fields, document metadata, tags, and favorite flag.
 
     Args:
         person (Person): The person with fields, documents, and tags loaded.
         include_sensitive (bool): Whether `sensitive` values may be exported.
+        include_storage_paths (bool): Whether to include documents' and the
+            photo's on-disk random filenames (SEC-6) — only true for an
+            encrypted backup archive, which carries the file bytes too and
+            needs the link to restore them.
 
     Returns:
         ExportPerson: The exportable person record.
@@ -72,16 +99,8 @@ def _person(person: Person, include_sensitive: bool) -> ExportPerson:
         is_favorite=person.is_favorite,
         tags=[tag.name for tag in person.tags],
         fields=[_field(field, include_sensitive) for field in person.fields],
-        documents=[
-            ExportDocument(
-                title=document.title,
-                original_filename=document.original_filename,
-                mime_type=document.mime_type,
-                size_bytes=document.size_bytes,
-                uploaded_at=document.uploaded_at,
-            )
-            for document in person.documents
-        ],
+        documents=[_document(document, include_storage_paths) for document in person.documents],
+        photo_path=person.photo_path if include_storage_paths else None,
     )
 
 
@@ -120,7 +139,10 @@ class ExportService:
         self._relationships = RelationshipRepository(session)
 
     async def export_person(
-        self, person_id: int, include_sensitive: bool = False
+        self,
+        person_id: int,
+        include_sensitive: bool = False,
+        include_storage_paths: bool = False,
     ) -> tuple[ExportEnvelope, str]:
         """Export a single person and the links that touch them.
 
@@ -128,6 +150,10 @@ class ExportService:
             person_id (int): The person id.
             include_sensitive (bool): Opt in to exporting `sensitive` field
                 values in plaintext; defaults to withholding them (SEC-7).
+            include_storage_paths (bool): Opt in to exporting documents'
+                and the photo's on-disk random filenames (SEC-6); defaults
+                to withholding them. Only `BackupService` sets this True —
+                the plain JSON export endpoints never do.
 
         Returns:
             tuple[ExportEnvelope, str]: (envelope, download filename).
@@ -140,17 +166,23 @@ class ExportService:
         envelope = self._envelope(
             scope="person",
             include_sensitive=include_sensitive,
-            people=[_person(person, include_sensitive)],
+            people=[_person(person, include_sensitive, include_storage_paths)],
             links=links,
         )
         return envelope, download_filename(person.full_name, ".json", fallback="person")
 
-    async def export_dataset(self, include_sensitive: bool = False) -> tuple[ExportEnvelope, str]:
+    async def export_dataset(
+        self, include_sensitive: bool = False, include_storage_paths: bool = False
+    ) -> tuple[ExportEnvelope, str]:
         """Export every person and every relationship in the vault.
 
         Args:
             include_sensitive (bool): Opt in to exporting `sensitive` field
                 values in plaintext; defaults to withholding them (SEC-7).
+            include_storage_paths (bool): Opt in to exporting documents'
+                and photos' on-disk random filenames (SEC-6); defaults to
+                withholding them. Only `BackupService` sets this True — the
+                plain JSON export endpoints never do.
 
         Returns:
             tuple[ExportEnvelope, str]: (envelope, download filename).
@@ -160,7 +192,9 @@ class ExportService:
         envelope = self._envelope(
             scope="dataset",
             include_sensitive=include_sensitive,
-            people=[_person(person, include_sensitive) for person in people],
+            people=[
+                _person(person, include_sensitive, include_storage_paths) for person in people
+            ],
             links=links,
         )
         stamp = datetime.now().strftime("%Y-%m-%d")

@@ -23,8 +23,7 @@
 | People relationship tree view (Phase 2b, new idea) | ✅ implemented end-to-end, ✓ verified |
 | Field-value search, JSON export, vCard export (Phase 3) | ✅ done, ✓ verified |
 | JSON import / restore (Phase 3) | ✅ done, ✓ verified |
-| Tags & favorites (Phase 3) | ✅ done, ✓ verified |
-| Encrypted backup, settings polish (Phase 3) | ⬜ not started |
+| **Phase 3 complete** (search, export/import, vCard, tags & favorites, encrypted backup, settings) | ✅ done, ✓ verified |
 | Multi-user + per-user data, admin panel, audit, Postgres (Phase 4 epic) | ⏳ deferred until app is very mature; scoped 2026-07-06 |
 | Test coverage | 🟡 backend covered; frontend Vitest set up (tree-layout unit tests only so far) |
 | Hardening (rate-limit, proxy flag, fonts) | 🟡 rate-limit + proxy flag done; fonts still gap (G-05) |
@@ -201,7 +200,9 @@
       tampered file is refused whole (the request transaction rolls back). Documents are reported
       as unrestorable (metadata only, see G-36). Returns an `ImportReport` the UI renders.
       11 new backend tests + live export→wipe→import→re-import round-trip.
-- [ ] Settings polish (backup status, data summary)
+- [x] Settings polish — `GET /api/system/summary` (counts for people/fields/documents/
+      relationships/tags, uploads and database size, `last_backup_at`) rendered as a "Your data"
+      card, backed by a generic `app_meta` key/value table the backup writes on success.
 - [x] **vCard export for a person** (new idea, alongside JSON export FR-30) — ✓ verified.
       `GET /api/people/{id}/vcard` (vCard 4.0). Field-mapping: label containing "email"/"phone"
       → EMAIL/TEL, exact "Address" → ADR, everything else (non-sensitive, non-empty) → NOTE line;
@@ -209,10 +210,17 @@
       with a TYPE param for the four standard types. "Export vCard" link on the ID-card. Deliberately
       skips PHOTO embedding and RFC 6350 line-folding for >75-octet lines — both are follow-ups if
       needed, not required for a useful, parseable file. 7 new tests.
-- [ ] **Encrypted backup/restore** (new idea, added 2026-07-05): in-app export produces a
-      passphrase-encrypted archive; restore decrypts before applying. Goes beyond the current
-      plain-tar procedure (G1/G2, README) — needs a decision on encryption approach (e.g. age/gpg
-      symmetric vs. in-app AES-GCM) and confirmation the passphrase is never persisted server-side
+- [x] **Encrypted backup/restore** (closes G-36) — ✓ verified. **Decision taken 2026-08-01:**
+      in-app Argon2id + AES-256-GCM over a gzipped tar holding the JSON export *and* the uploads,
+      chosen over `age`/`gpg` because the KDF comes free from the existing `argon2-cffi` and it
+      keeps the single-container story (no external binary, no passphrase on argv). The 46-byte
+      header is the GCM **AAD**, so KDF parameters can't be downgraded; they are also bounds-checked
+      before deriving, or a crafted file could demand ~4 TiB of RAM (G-40). `POST /api/backup`
+      (POST so the passphrase never lands in a URL or access log) and `POST /api/restore`; the
+      passphrase is never stored, logged, or echoed. Wrong passphrase and corruption are reported
+      identically — no oracle. Tar extraction rejects traversal, symlinks, hardlinks and device
+      nodes, and never overwrites. Format documented in the README so an archive can be decrypted
+      without Dossier. 28 backend tests + a 24-point live check incl. a malicious archive.
 
 ### Organizing people — tags & favorites (user idea, added 2026-07-07)
 
@@ -325,7 +333,7 @@
 
 ### Testing
 - [x] Backend: auth, people, fields, documents, relationships, vcard, tree, kinship, export,
-      import, tags flows (94 tests) — ✓ passing
+      import, tags, backup/crypto flows (122 tests) — ✓ passing
 - [x] Frontend: Vitest + Testing Library + jsdom set up (`npm run test`); tree-layout unit tests
       plus component tests for tags, favorites, index filters, tag rename/delete, and the SEC-7
       mask (21) — ✓ passing

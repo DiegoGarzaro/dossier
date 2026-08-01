@@ -14,6 +14,8 @@ class Settings(BaseSettings):
         data_dir (Path): Directory holding the SQLite database and uploaded files.
         session_idle_days (int): Idle days before a session expires (FR-4).
         max_upload_mb (int): Maximum accepted upload size in megabytes (FR-20).
+        max_backup_mb (int): Maximum accepted plaintext backup archive size in
+            megabytes, checked on both backup and restore (G-36).
         trust_proxy (bool): Whether the app runs behind a reverse proxy (SEC-8).
         login_max_attempts (int): Consecutive failed logins before an account locks (G-07).
         login_lockout_minutes (int): Minutes an account stays locked after too many failures.
@@ -25,6 +27,7 @@ class Settings(BaseSettings):
     data_dir: Path = Path("data")
     session_idle_days: int = 14
     max_upload_mb: int = 25
+    max_backup_mb: int = 200
     trust_proxy: bool = False
     login_max_attempts: int = 5
     login_lockout_minutes: int = 15
@@ -64,6 +67,15 @@ class Settings(BaseSettings):
             int: The configured limit converted to bytes.
         """
         return self.max_upload_mb * 1024 * 1024
+
+    @property
+    def max_backup_bytes(self) -> int:
+        """Maximum plaintext backup archive size in bytes.
+
+        Returns:
+            int: The configured limit converted to bytes.
+        """
+        return self.max_backup_mb * 1024 * 1024
 
 
 @lru_cache

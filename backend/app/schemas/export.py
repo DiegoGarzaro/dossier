@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.core.enums import FieldType, RelationshipType
 
-EXPORT_SCHEMA_VERSION = 2
+EXPORT_SCHEMA_VERSION = 3
 
 ExportScope = Literal["person", "dataset"]
 
@@ -40,8 +40,12 @@ class ExportDocument(BaseModel):
     """Metadata for an uploaded document.
 
     The file bytes are **not** part of the JSON — they live on the `/data`
-    volume and are covered by the directory backup (G1/G2). The on-disk
-    storage filename is deliberately excluded (SEC-6).
+    volume and are covered by the directory backup (G1/G2), or, for a full
+    encrypted backup, inside the same archive (G-36). `storage_path` is the
+    random on-disk filename: the **plain** JSON export deliberately leaves it
+    `None` so it never leaves over the API (SEC-6); only the encrypted
+    backup archive (`BackupService`) populates it, since that archive
+    carries the file bytes too and needs the link to restore them.
     """
 
     title: str
@@ -49,15 +53,19 @@ class ExportDocument(BaseModel):
     mime_type: str
     size_bytes: int
     uploaded_at: datetime
+    storage_path: str | None = None
 
 
 class ExportPerson(BaseModel):
     """One person with their fields, document metadata, tags, and favorite flag.
 
     `tags` carries tag **names**, not ids — ids are meaningless across vaults,
-    while a name can be matched (and find-or-created) on import. Both `tags`
-    and `is_favorite` default so a schema-v1 file (produced before either
-    existed) still validates and imports cleanly.
+    while a name can be matched (and find-or-created) on import. `tags` and
+    `is_favorite` default so a schema-v1 file (produced before either
+    existed) still validates and imports cleanly; `photo_path` defaults so a
+    v1 or v2 file (produced before it existed) does too. Like
+    `ExportDocument.storage_path`, `photo_path` stays `None` in the plain
+    JSON export (SEC-6) and is populated only inside an encrypted backup.
     """
 
     id: int
@@ -69,6 +77,7 @@ class ExportPerson(BaseModel):
     tags: list[str] = []
     fields: list[ExportField]
     documents: list[ExportDocument]
+    photo_path: str | None = None
 
 
 class ExportRelationship(BaseModel):
@@ -111,6 +120,11 @@ class ImportReport(BaseModel):
 
     Import is additive: nothing is deleted or overwritten, so every number
     here counts something that was *added* or deliberately *skipped*.
+    `documents_restored` counts documents (and, implicitly, a photo) whose
+    file bytes were actually recovered — only possible when importing an
+    encrypted backup archive (G-36), since a plain JSON export never carries
+    `storage_path`/`photo_path` and so always counts every document towards
+    `documents_skipped` instead.
     """
 
     schema_version: int
@@ -120,5 +134,6 @@ class ImportReport(BaseModel):
     relationships_created: int = 0
     relationships_skipped: int = 0
     documents_skipped: int = 0
+    documents_restored: int = 0
     sensitive_values_missing: int = 0
     warnings: list[str] = []

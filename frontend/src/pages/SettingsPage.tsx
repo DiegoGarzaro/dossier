@@ -1,12 +1,90 @@
-/** Settings — change password (FR-3); backup guidance lives in the README. */
+/** Settings — change password (FR-3), data summary, encrypted backup/restore
+ * (Phase 3), JSON export/import, and tag admin; manual `/data` guidance lives
+ * in the README. */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, FileJson, Pencil, Trash2, Upload, X } from 'lucide-react'
+import { Check, FileJson, Lock, Pencil, Trash2, Unlock, Upload, X } from 'lucide-react'
 import { type ChangeEvent, type FormEvent, useId, useState } from 'react'
 
 import { Button, Dialog, Input, SectionHeading } from '../components/ui'
-import { ApiError, api } from '../lib/api'
-import type { ImportReport, Tag } from '../lib/types'
+import { ApiError, api, apiBlob } from '../lib/api'
+import type { ImportReport, SystemSummary, Tag } from '../lib/types'
+
+/** Formats a byte count as a human-readable KB/MB string (no added dependency). */
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** Triggers a browser download of `blob` as `filename`, then releases the
+ * temporary object URL so it doesn't leak for the life of the tab. */
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
+function backupFilename(): string {
+  const date = new Date().toISOString().slice(0, 10)
+  return `dossier-backup-${date}.dossier`
+}
+
+/** "Your data" summary card: counts + sizes for context before backing up. */
+function DataSummaryCard() {
+  const summary = useQuery({
+    queryKey: ['summary'],
+    queryFn: () => api<SystemSummary>('/api/system/summary'),
+  })
+
+  return (
+    <div className="rounded-lg border border-border bg-surface p-6 shadow-(--shadow-card)">
+      <h2 className="mb-4 font-display text-lg font-semibold">Your data</h2>
+      {summary.isPending ? (
+        <p className="text-sm text-muted">Loading…</p>
+      ) : summary.data ? (
+        <>
+          <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
+            <div>
+              <dt className="label-caps">People</dt>
+              <dd className="text-lg font-semibold text-ink">{summary.data.people}</dd>
+            </div>
+            <div>
+              <dt className="label-caps">Fields</dt>
+              <dd className="text-lg font-semibold text-ink">{summary.data.fields}</dd>
+            </div>
+            <div>
+              <dt className="label-caps">Documents</dt>
+              <dd className="text-lg font-semibold text-ink">{summary.data.documents}</dd>
+            </div>
+            <div>
+              <dt className="label-caps">Relationships</dt>
+              <dd className="text-lg font-semibold text-ink">{summary.data.relationships}</dd>
+            </div>
+            <div>
+              <dt className="label-caps">Tags</dt>
+              <dd className="text-lg font-semibold text-ink">{summary.data.tags}</dd>
+            </div>
+          </dl>
+          <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-4 text-sm text-muted">
+            <span>Uploads: {formatBytes(summary.data.uploads_bytes)}</span>
+            <span>Database: {formatBytes(summary.data.database_bytes)}</span>
+          </div>
+          <p className="mt-2 text-sm text-muted">
+            {summary.data.last_backup_at
+              ? `Last backup: ${summary.data.last_backup_at.slice(0, 10)}`
+              : 'No backup taken yet'}
+          </p>
+        </>
+      ) : null}
+    </div>
+  )
+}
 
 /** One row in the tags admin list: inline rename (pencil → input → save/cancel,
  * mirroring FieldRow/DocumentRow) and delete-with-confirmation. */
@@ -205,6 +283,70 @@ export function SettingsPage() {
     })
   }
 
+  const [backupPassphrase, setBackupPassphrase] = useState('')
+  const [backupConfirm, setBackupConfirm] = useState('')
+  const backupPassphraseId = useId()
+  const backupConfirmId = useId()
+  const backupValid = backupPassphrase.length >= 12 && backupPassphrase === backupConfirm
+
+  const backupMutation = useMutation({
+    mutationFn: () => apiBlob('/api/backup', { body: { passphrase: backupPassphrase } }),
+    onSuccess: (blob) => {
+      downloadBlob(blob, backupFilename())
+      void queryClient.invalidateQueries({ queryKey: ['summary'] })
+    },
+    // The passphrase only ever lives in memory for the life of the request,
+    // win or lose — never in a URL, a query string, or localStorage.
+    onSettled: () => {
+      setBackupPassphrase('')
+      setBackupConfirm('')
+    },
+  })
+  const backupError = backupMutation.error instanceof ApiError ? backupMutation.error.message : null
+
+  const onBackupSubmit = (event: FormEvent) => {
+    event.preventDefault()
+    if (backupValid) backupMutation.mutate()
+  }
+
+  const [restoreFile, setRestoreFile] = useState<File | null>(null)
+  const [restorePassphrase, setRestorePassphrase] = useState('')
+  const [confirmingRestore, setConfirmingRestore] = useState(false)
+  const [restoreReport, setRestoreReport] = useState<ImportReport | null>(null)
+  const restoreFileId = useId()
+  const restorePassphraseId = useId()
+  const restoreValid = restoreFile !== null && restorePassphrase.length >= 12
+
+  const restoreMutation = useMutation({
+    mutationFn: () => {
+      const form = new FormData()
+      form.append('file', restoreFile as File)
+      form.append('passphrase', restorePassphrase)
+      return api<ImportReport>('/api/restore', { method: 'POST', form })
+    },
+    onSuccess: (report) => {
+      setRestoreReport(report)
+      setConfirmingRestore(false)
+      setRestoreFile(null)
+      setRestorePassphrase('')
+      void queryClient.invalidateQueries({ queryKey: ['people'] })
+      void queryClient.invalidateQueries({ queryKey: ['tags'] })
+      void queryClient.invalidateQueries({ queryKey: ['summary'] })
+    },
+    // Deliberately no onError side effect: the dialog and file/passphrase stay
+    // put (e.g. a wrong passphrase) so the user can correct and retry.
+  })
+  const restoreError = restoreMutation.error instanceof ApiError ? restoreMutation.error.message : null
+
+  const onRestoreFileChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setRestoreReport(null)
+    restoreMutation.reset()
+    setRestoreFile(file)
+  }
+
   const change = useMutation({
     mutationFn: () =>
       api<void>('/api/auth/password', {
@@ -234,7 +376,7 @@ export function SettingsPage() {
   const error = localError ?? (change.error instanceof ApiError ? change.error.message : null)
 
   return (
-    <div className="mx-auto max-w-md space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6">
       <h1 className="font-display text-3xl font-semibold">Settings</h1>
       <div className="rounded-lg border border-border bg-surface p-6 shadow-(--shadow-card)">
         <h2 className="mb-4 font-display text-lg font-semibold">Change password</h2>
@@ -282,8 +424,137 @@ export function SettingsPage() {
           </Button>
         </form>
       </div>
+
+      <DataSummaryCard />
+
       <div className="rounded-lg border border-border bg-surface p-6 shadow-(--shadow-card)">
-        <h2 className="mb-2 font-display text-lg font-semibold">Backups</h2>
+        <h2 className="mb-2 font-display text-lg font-semibold">Encrypted backup</h2>
+        <p className="mb-1 text-sm text-muted">
+          Creates one file with everything — people, fields, relationships, tags, documents,
+          photos, and sensitive field values — encrypted with the passphrase below.
+        </p>
+        <p className="mb-1 text-sm text-muted">
+          The passphrase is <strong className="font-medium text-ink">never stored</strong>. If
+          it's lost, this file cannot be opened by anyone, including us — write the passphrase
+          down somewhere safe.
+        </p>
+        <p className="mb-4 text-sm text-muted">
+          This restores your data, not your login account — the{' '}
+          <code className="font-mono text-xs">/data</code> directory backup below still covers
+          the account itself.
+        </p>
+        <form onSubmit={onBackupSubmit} className="space-y-4">
+          <Input
+            id={backupPassphraseId}
+            label="Passphrase (minimum 12 characters)"
+            type="password"
+            value={backupPassphrase}
+            onChange={(event) => setBackupPassphrase(event.target.value)}
+            autoComplete="new-password"
+            minLength={12}
+            required
+          />
+          <Input
+            id={backupConfirmId}
+            label="Confirm passphrase"
+            type="password"
+            value={backupConfirm}
+            onChange={(event) => setBackupConfirm(event.target.value)}
+            autoComplete="new-password"
+            required
+          />
+          {backupPassphrase && backupConfirm && backupPassphrase !== backupConfirm && (
+            <p className="text-sm text-danger">Passphrases don't match.</p>
+          )}
+          {backupError && (
+            <p role="alert" className="text-sm text-danger">
+              {backupError}
+            </p>
+          )}
+          <Button type="submit" disabled={!backupValid || backupMutation.isPending}>
+            <Lock size={14} aria-hidden />
+            {backupMutation.isPending ? 'Preparing…' : 'Create encrypted backup'}
+          </Button>
+        </form>
+      </div>
+
+      <div className="rounded-lg border border-border bg-surface p-6 shadow-(--shadow-card)">
+        <h2 className="mb-2 font-display text-lg font-semibold">Restore from backup</h2>
+        <p className="mb-4 text-sm text-muted">
+          Restores people, fields, relationships, tags, and documents from an encrypted backup
+          file. It never deletes or overwrites anything already here.
+        </p>
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label htmlFor={restoreFileId} className="label-caps block">
+              Backup file (.dossier)
+            </label>
+            <input
+              id={restoreFileId}
+              type="file"
+              accept=".dossier"
+              onChange={onRestoreFileChange}
+              className="block w-full text-sm text-ink file:mr-3 file:h-8 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:text-[13px] file:font-medium file:text-ink hover:file:bg-surface-hover"
+            />
+          </div>
+          <Input
+            id={restorePassphraseId}
+            label="Passphrase"
+            type="password"
+            value={restorePassphrase}
+            onChange={(event) => setRestorePassphrase(event.target.value)}
+            autoComplete="current-password"
+            minLength={12}
+          />
+          {restoreFile && (
+            <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface-hover px-3 py-2">
+              <span className="truncate text-sm text-ink">{restoreFile.name}</span>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setConfirmingRestore(true)}
+                disabled={!restoreValid}
+              >
+                <Unlock size={14} aria-hidden /> Restore
+              </Button>
+            </div>
+          )}
+          {restoreReport && (
+            <div
+              role="status"
+              className="space-y-1.5 rounded-md border border-border bg-surface-hover px-3 py-2 text-sm"
+            >
+              <p className="font-medium text-ink">Restore complete</p>
+              <ul className="list-disc space-y-0.5 pl-4 text-muted">
+                <li>
+                  {restoreReport.people_created} {restoreReport.people_created === 1 ? 'person' : 'people'} added
+                  {restoreReport.people_skipped > 0
+                    ? `, ${restoreReport.people_skipped} skipped (already existed)`
+                    : ''}
+                </li>
+                <li>{restoreReport.fields_created} fields added</li>
+                <li>
+                  {restoreReport.relationships_created} relationships added
+                  {restoreReport.relationships_skipped > 0
+                    ? `, ${restoreReport.relationships_skipped} skipped`
+                    : ''}
+                </li>
+                <li>{restoreReport.documents_restored} documents restored</li>
+              </ul>
+              {restoreReport.warnings.length > 0 && (
+                <ul className="list-disc space-y-0.5 pl-4 text-muted">
+                  {restoreReport.warnings.map((warning, index) => (
+                    <li key={index}>{warning}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-border bg-surface p-6 shadow-(--shadow-card)">
+        <h2 className="mb-2 font-display text-lg font-semibold">Manual backup &amp; JSON export</h2>
         <p className="text-sm text-muted">
           All data lives in the <code className="font-mono text-xs">/data</code> volume (database +
           uploads). Back up that directory while the container is stopped — see the README for the
@@ -398,6 +669,40 @@ export function SettingsPage() {
       </div>
 
       <TagsSection />
+
+      {confirmingRestore && restoreFile && (
+        <Dialog title="Restore from backup" onClose={() => setConfirmingRestore(false)}>
+          <div className="space-y-4">
+            <p className="text-sm text-ink">
+              Restore <span className="font-medium">{restoreFile.name}</span>? This adds people,
+              fields, relationships, tags, and documents from the backup — it never deletes or
+              overwrites anything already here.
+            </p>
+            {restoreError && (
+              <p role="alert" className="text-sm text-danger">
+                {restoreError}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => setConfirmingRestore(false)}
+                disabled={restoreMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                onClick={() => restoreMutation.mutate()}
+                disabled={restoreMutation.isPending}
+              >
+                {restoreMutation.isPending ? 'Restoring…' : 'Restore'}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
 
       {confirmingImport && importFile && (
         <Dialog title="Import from export file" onClose={() => setConfirmingImport(false)}>

@@ -6,17 +6,25 @@ already on file is skipped, and links from the file are reconnected to that
 existing record instead — which makes re-running the same file a no-op rather
 than a way to duplicate a vault.
 
-Two things in an export can't be restored and are reported instead of failing:
-document *bytes* (the file only carries metadata; the blobs live on `/data`)
-and `sensitive` values withheld by a default export (SEC-7).
+Two things in a plain JSON export can't be restored and are reported instead
+of failing: document *bytes* (the file only carries metadata; the blobs live
+on `/data`) and `sensitive` values withheld by a default export (SEC-7). An
+**encrypted backup archive** (`BackupService`, G-36) is different: it always
+includes sensitive values, and it extracts its bundled files onto
+`settings.uploads_dir` *before* calling `apply()` here — so when a document's
+or a photo's file actually landed on disk, this service restores the real
+row instead of merely reporting a gap. This is self-describing from the
+envelope alone: whether a file was recovered is decided per document/photo
+by checking the filesystem, with no separate "backup mode" flag.
 """
 
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.enums import RelationshipType
 from app.core.errors import AppError, InvalidInputError
-from app.models import Person, PersonField
+from app.models import Document, Person, PersonField
 from app.repositories.people_repo import PeopleRepository
 from app.schemas.export import (
     EXPORT_SCHEMA_VERSION,
@@ -81,7 +89,6 @@ class ImportService:
 
         id_map: dict[int, int] = {}
         for exported in envelope.people:
-            report.documents_skipped += len(exported.documents)
             report.sensitive_values_missing += sum(
                 1 for field in exported.fields if field.value_omitted
             )
@@ -94,7 +101,7 @@ class ImportService:
                     "in the file were reconnected to the existing record."
                 )
                 continue
-            person = await self._create_person(exported)
+            person = await self._create_person(exported, report)
             id_map[exported.id] = person.id
             report.people_created += 1
             report.fields_created += len(person.fields)
@@ -104,9 +111,10 @@ class ImportService:
 
         if report.documents_skipped:
             report.warnings.append(
-                f"{report.documents_skipped} document(s) were listed in the file but not "
-                "restored — an export carries document metadata, never the files themselves. "
-                "Restore those from the /data volume backup."
+                f"{report.documents_skipped} document(s) listed in the file could not be "
+                "restored — a plain JSON export carries metadata only (no file bytes), or the "
+                "file was missing from the backup archive. Restore those from the /data volume "
+                "backup if needed."
             )
         if report.sensitive_values_missing:
             report.warnings.append(
@@ -140,8 +148,8 @@ class ImportService:
                 f"This file holds more than {MAX_IMPORT_PEOPLE} people and was refused"
             )
 
-    async def _create_person(self, exported: ExportPerson) -> Person:
-        """Create a person with exactly the fields, favorite flag, and tags in the file.
+    async def _create_person(self, exported: ExportPerson, report: ImportReport) -> Person:
+        """Create a person with the fields, documents, photo, favorite flag, and tags in the file.
 
         The seeded system fields are deliberately *not* added here: the export
         already carries them, so letting `PeopleService.create` seed would
@@ -149,14 +157,31 @@ class ImportService:
         assigned only to newly created people — a skipped (already-existing)
         person never has their tags touched, keeping import additive.
 
+        A document is restored as a real row only when its `storage_path` is
+        set *and* that file actually exists under `settings.uploads_dir` —
+        true after `BackupService` extracts a backup archive, never true for
+        a plain JSON export. The photo works the same way. Anything that
+        doesn't clear that bar is counted in `report.documents_skipped`
+        instead (G-36).
+
         Args:
             exported (ExportPerson): The person as exported.
+            report (ImportReport): Mutated with document restore/skip counts.
 
         Returns:
-            Person: The persisted person with its fields.
+            Person: The persisted person, with its fields and (when their
+                files were recovered) documents and photo.
         """
         ordered = sorted(exported.fields, key=lambda field: field.position)
-        person = Person(full_name=exported.full_name, is_favorite=exported.is_favorite)
+        uploads_dir = get_settings().uploads_dir
+
+        photo_path = exported.photo_path
+        if photo_path and not (uploads_dir / photo_path).is_file():
+            photo_path = None
+
+        person = Person(
+            full_name=exported.full_name, is_favorite=exported.is_favorite, photo_path=photo_path
+        )
         person.fields = [
             PersonField(
                 label=field.label,
@@ -168,6 +193,25 @@ class ImportService:
             )
             for position, field in enumerate(ordered)
         ]
+
+        documents = []
+        for document in exported.documents:
+            if document.storage_path and (uploads_dir / document.storage_path).is_file():
+                documents.append(
+                    Document(
+                        title=document.title,
+                        original_filename=document.original_filename,
+                        mime_type=document.mime_type,
+                        size_bytes=document.size_bytes,
+                        storage_path=document.storage_path,
+                        uploaded_at=document.uploaded_at,
+                    )
+                )
+                report.documents_restored += 1
+            else:
+                report.documents_skipped += 1
+        person.documents = documents
+
         person = await self._people.add(person)
         for tag_name in exported.tags:
             await self._tags.assign(person.id, tag_name)

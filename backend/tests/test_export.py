@@ -43,7 +43,7 @@ async def test_person_export_envelope_and_fields(authed_client: AsyncClient) -> 
     assert response.headers["x-content-type-options"] == "nosniff"
 
     payload = response.json()
-    assert payload["schema_version"] == 2
+    assert payload["schema_version"] == 3
     assert payload["generator"] == "dossier"
     assert payload["scope"] == "person"
     assert payload["includes_sensitive_values"] is False
@@ -128,6 +128,31 @@ async def test_person_export_document_metadata_excludes_storage_path(
     assert document["size_bytes"] == len(PNG_BYTES)
     assert "storage_path" not in document
     assert "_photos" not in response.text
+
+    await authed_client.delete(f"/api/people/{person['id']}")
+
+
+async def test_person_export_excludes_photo_path(authed_client: AsyncClient) -> None:
+    """A person's photo exports as `has_photo` only — never the on-disk random filename (SEC-6)."""
+    person = await _create_person(authed_client, "Export Photo")
+    photo = await authed_client.put(
+        f"/api/people/{person['id']}/photo",
+        files={"file": ("photo.png", io.BytesIO(PNG_BYTES), "image/png")},
+    )
+    assert photo.status_code == 200, photo.text
+
+    response = await authed_client.get(f"/api/people/{person['id']}/export")
+    payload = response.json()
+    exported = payload["people"][0]
+    assert exported["has_photo"] is True
+    assert "photo_path" not in exported
+    assert "_photos" not in response.text
+
+    dataset_response = await authed_client.get("/api/export")
+    dataset_payload = dataset_response.json()
+    exported_in_dataset = next(p for p in dataset_payload["people"] if p["id"] == person["id"])
+    assert "photo_path" not in exported_in_dataset
+    assert "_photos" not in dataset_response.text
 
     await authed_client.delete(f"/api/people/{person['id']}")
 
@@ -230,7 +255,7 @@ async def test_export_carries_favorite_flag_and_tag_names(authed_client: AsyncCl
     ).json()
 
     person_export = (await authed_client.get(f"/api/people/{pid}/export")).json()
-    assert person_export["schema_version"] == 2
+    assert person_export["schema_version"] == 3
     exported = person_export["people"][0]
     assert exported["is_favorite"] is True
     assert exported["tags"] == ["Export Tag"]

@@ -110,7 +110,8 @@ export interface PersonDetail {
   tags: Tag[]
 }
 
-/** Summary returned after a JSON import/restore (Phase 3, FR-30 / G3). */
+/** Summary returned after a JSON import or an encrypted-backup restore
+ * (Phase 3, FR-30 / G3; `documents_restored` added for encrypted restore). */
 export interface ImportReport {
   schema_version: number
   people_created: number
@@ -119,8 +120,21 @@ export interface ImportReport {
   relationships_created: number
   relationships_skipped: number
   documents_skipped: number
+  documents_restored: number
   sensitive_values_missing: number
   warnings: string[]
+}
+
+/** Counts and sizes for the "Your data" summary card (Phase 3, encrypted backup). */
+export interface SystemSummary {
+  people: number
+  fields: number
+  documents: number
+  relationships: number
+  tags: number
+  uploads_bytes: number
+  database_bytes: number
+  last_backup_at: string | null
 }
 
 export interface AuthStatus {
