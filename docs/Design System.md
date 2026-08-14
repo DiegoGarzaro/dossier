@@ -186,40 +186,74 @@ Sizes: `sm` 32px, `md` 40px (default), `lg` 44px. Icon + label spacing 8px. Min 
 - Label above input in `label` style. Error text `--danger`, 12.5px, below.
 - `textarea`: min 3 rows, auto-grow. `date`: native picker, value displayed in mono. `boolean`: toggle switch (accent when on). `sensitive`: value masked `••••••••` with an eye toggle (`--seal` icon) to reveal; reveal is per-view, never persisted.
 
-### 5.3 The ID-card (the centerpiece)
+### 5.3 The person record (the centerpiece)
+
+An **open letterhead**, not a boxed card: content sits directly on the paper
+background in one centered column (`max-w-2xl`), with sections ruled off by
+small-caps markers and hairlines. No card chrome, no zebra striping — the
+document itself is the surface.
 
 Layout — desktop:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│  ┌────────┐   Diego Garzaro                        [Edit] [⋯] │  ← header
-│  │ photo  │   ‹display, serif›                                │
-│  │ 96px   │                                                   │
-│  │ ○      │   ⌾ PINNED CHIPS (amber marker):                  │
-│  └────────┘   │ DOCUMENT №  12.345.678-9  (mono)            │ │
-│               │ ADDRESS     Rua X, 100 — City               │ │
-│               │ NATIONALITY Brazilian                       │ │
-├──────────────────────────────────────────────────────────────┤
-│  FIELDS                                        [+ Add field] │  ← section
-│  ── label ─────────────  value ───────────────────  ⇅  ✎  ✕ │  ← field row
-│  BLOOD TYPE              O+                          ⇅  ✎  ✕ │
-│  INSURANCE №             778-221-004  (mono)         ⇅  ✎  ✕ │
-├──────────────────────────────────────────────────────────────┤
-│  DOCUMENTS                                     [+ Upload]     │
-│  📄 Passport.pdf   PDF · 1.2 MB · 2026-02-11   [↓] [🗑]      │
-├──────────────────────────────────────────────────────────────┤
-│  RELATIONSHIPS (Phase 2)                       [+ Link]      │
-│  Spouse:  Ana Garzaro →     Children:  Leo →  Mia →         │
+│  ‹ All people                                    [☆]  [⋮]    │  ← utility row
+│                                                              │
+│                        ┌────────┐                            │
+│                        │ photo  │  112px circle              │
+│                        └────────┘                            │
+│                      Diego Garzaro                           │  ← display serif
+│               FILE № 0042 · ADDED 2026-02-11                 │  ← mono meta
+│              ( Family ) ( Close friends ) [Add a tag…]       │  ← tag chips
+│                                                              │
+│  KEY FACTS ──────────────────────────────────────            │
+│  DOCUMENT №  · · · · · · · · · · · · · ·  12.345.678-9       │  ← dotted leaders
+│  NATIONALITY · · · · · · · · · · · · · · · ·  Brazilian      │
+│                                                              │
+│  FIELDS 12 ────────────────────────────────  [+ Add field]   │
+│  label              value                       ⇅  ✎  📌  ✕  │  ← hairline dividers
+│                                                              │
+│  DOCUMENTS 2 ───────────────────────────────  [+ Upload]     │
+│  📄 Passport.pdf   PDF · 1.2 MB · 2026-02-11     ↓  ✎  🗑    │
+│                                                              │
+│  RELATIONSHIPS 3 ───────────────  [View tree] [+ Add]        │
+│  SPOUSE: ( Ana → )   CHILDREN: ( Leo → ) ( Mia → )           │
+│                                                              │
+│                 LAST UPDATED 2026-02-11                      │  ← quiet stamp
 └──────────────────────────────────────────────────────────────┘
 ```
 
 Specs:
-- **Card container:** `--surface`, `--radius-lg`, border `--border`, `--shadow-md`, max-width 880px, centered.
-- **Header:** photo (96px `--radius-full`, or placeholder = initials on `--accent-fill`); name in `display`; pinned fields as a stacked list of **pinned chips**. A pinned chip = small `--seal` dot/pin icon + `label`-style key + value; background `--seal-fill` is optional (keep it subtle — a left amber rule reads more "official" than a filled chip).
-- **Field row:** grid `label (min 160px) | value (fill) | actions`. Zebra with `--surface-subtle`. Hover reveals `⇅` drag handle, `✎` edit, `✕` remove (icons `--text-subtle` → `--text` on hover; remove → `--danger`). Reorder via drag handle (FR-15 / C5). Inline edit: value becomes an input in place.
-- **Pinned toggle:** a pin icon on each row; pinned rows lift into the header (FR-16). Pinned marker color `--seal`.
-- **Section headings:** `h2` serif + `label`-style count, with the section action button right-aligned.
-- **Mobile (< 640px):** header stacks (photo top, name, chips); field row collapses to two lines (label over value); actions move to an overflow `⋯` menu.
+- **Utility row:** back link left; favorite star + `⋯` menu right. The menu
+  (Rename, Export vCard, Export JSON, then a divider and Delete in `--danger`)
+  keeps the record itself free of button chrome.
+- **Masthead:** photo (112px `--radius-full`, initials placeholder on
+  `--accent-fill`), name in `display` serif centered, then a mono
+  `FILE № … · ADDED …` meta line in `--text-subtle`, then the tag chips with a
+  pill-shaped add input.
+- **Section marker (`SectionRule`):** `label`-style title + mono count, a
+  hairline `--border` rule filling the row, section action (ghost button)
+  right-aligned. Replaces boxed section headers.
+- **Key facts:** pinned fields (FR-16) set as a form line — `label`-style key,
+  a dotted leader (`border-b border-dotted --border-strong`), value
+  right-aligned; mono for number/date/sensitive per §3. Sensitive values stay
+  masked with the on-demand eye toggle (SEC-7). The section is omitted when
+  nothing is pinned.
+- **Field row:** grid `label (min 160px) | value (fill) | actions`, rows
+  separated by hairline `divide-y` rules (no zebra). Hover lifts the row to
+  `--surface` and reveals `⇅` drag handle, pin, `✎` edit, `✕` remove (icons
+  `--text-subtle` → `--text` on hover; remove → `--danger`). Reorder via drag
+  handle (FR-15 / C5); inline edit turns the value into an input in place.
+  Pinned marker color `--seal`.
+- **Document row:** file-type icon, title (medium), meta line
+  `TYPE · SIZE · DATE` in `--text-muted` mono, hover-revealed
+  download/rename/delete. Delete → confirm dialog.
+- **Footer:** a centered mono `LAST UPDATED …` stamp line in `--text-subtle`.
+- **Mobile (< 640px):** the masthead stays centered (chips wrap); field rows
+  collapse to label-over-value with the reorder chevrons visible (native
+  HTML5 drag doesn't exist on touch); section actions collapse to icon-only
+  buttons so the rule rows never overflow the viewport.
+
 
 ### 5.4 People index (grid)
 

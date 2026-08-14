@@ -50,7 +50,7 @@ export const COUPLE_GAP = 28 // between members of a couple unit (tie drawn here
 export const UNIT_GAP = 56 // between units within a row
 export const ROW_GAP = 76 // vertical channel between rows where buses run
 const BUS_OFFSET = 18 // first bus rail below a parent row
-const BUS_STEP = 9 // stagger between rails sharing a channel
+export const BUS_STEP = 9 // stagger between rails sharing a channel
 const FALLBACK_SIZE: ChipSize = { width: 150, height: 44 }
 
 interface Rect {
@@ -102,7 +102,8 @@ export function layoutTree(
 
   // Classify edges once: couples form units, canonical parent/godparent
   // edges spanning exactly one row become buses, same-row edges become
-  // ties/arcs, and anything irregular falls back to a generic elbow.
+  // straight ties (adjacent) or channel elbows, and anything irregular
+  // falls back to a generic elbow.
   const coupleEdges: TreeEdge[] = []
   const busParentEdges: TreeEdge[] = []
   const busGodEdges: TreeEdge[] = []
@@ -292,7 +293,21 @@ export function layoutTree(
 
   const lines: DrawnLine[] = []
 
-  /** Same-row link: straight tie between adjacent chips, arc below otherwise. */
+  interface ChannelItem {
+    row: number
+    anchorX: number
+    build: (busY: number) => DrawnLine
+  }
+  // Everything that runs through the channel below a row — family buses,
+  // godparent drops, and peer elbows — is collected here first and then
+  // assigned a staggered depth per row, so two connectors never share a y.
+  const channelItems: ChannelItem[] = []
+
+  /** Same-row link: straight tie between adjacent chips; otherwise a
+   * right-angle elbow through the row's channel (down, across, up). The old
+   * quadratic dip crossed the bus channel at a shallow angle, and two such
+   * arcs in one channel ran a few pixels apart — visible as a scratchy
+   * double line (G-60). */
   const pushPeerLine = (edge: TreeEdge) => {
     const row = rowOf.get(edge.source_id)!
     const a = rectOf(edge.source_id)
@@ -308,13 +323,16 @@ export function layoutTree(
         midY: Math.max(left.bottom, right.bottom) + 10,
       })
     } else {
-      const dip = Math.max(left.bottom, right.bottom) + 20
-      lines.push({
-        path: `M ${left.cx} ${left.bottom} Q ${(left.cx + right.cx) / 2} ${dip} ${right.cx} ${right.bottom}`,
-        kind: edge.type,
-        label: edge.label,
-        midX: (left.cx + right.cx) / 2,
-        midY: dip - 6,
+      channelItems.push({
+        row,
+        anchorX: (left.cx + right.cx) / 2,
+        build: (busY) => ({
+          path: `M ${left.cx} ${left.bottom} V ${busY} H ${right.cx} V ${right.bottom}`,
+          kind: edge.type,
+          label: edge.label,
+          midX: (left.cx + right.cx) / 2,
+          midY: busY,
+        }),
       })
     }
   }
@@ -330,12 +348,6 @@ export function layoutTree(
       edge.source_id,
     ])
   }
-  interface ChannelItem {
-    row: number
-    anchorX: number
-    build: (busY: number) => DrawnLine
-  }
-  const channelItems: ChannelItem[] = []
 
   const families = new Map<number, { parents: number[]; children: number[] }>()
   const familyKeys = new Map<string, number>()
@@ -399,19 +411,6 @@ export function layoutTree(
       }),
     })
   }
-  const itemsByChannel = new Map<number, ChannelItem[]>()
-  for (const item of channelItems) {
-    itemsByChannel.set(item.row, [...(itemsByChannel.get(item.row) ?? []), item])
-  }
-  for (const [row, items] of itemsByChannel) {
-    items.sort((a, b) => a.anchorX - b.anchorX)
-    const channelTop = rowY[row] + rowHeights[row]
-    const channelBottom = rowY[row + 1] ?? channelTop + ROW_GAP
-    items.forEach((item, index) => {
-      const busY = Math.min(channelTop + BUS_OFFSET + index * BUS_STEP, channelBottom - 10)
-      lines.push(item.build(busY))
-    })
-  }
 
   // Remaining same-row links; sibling ties are redundant when a family bus
   // already joins the two through a shared parent.
@@ -431,6 +430,21 @@ export function layoutTree(
   for (const edge of sameRowEdges) {
     if (edge.type === 'sibling' && shareParent(edge.source_id, edge.target_id)) continue
     pushPeerLine(edge)
+  }
+
+  // Channel allocation: one staggered depth per connector, per row.
+  const itemsByChannel = new Map<number, ChannelItem[]>()
+  for (const item of channelItems) {
+    itemsByChannel.set(item.row, [...(itemsByChannel.get(item.row) ?? []), item])
+  }
+  for (const [row, items] of itemsByChannel) {
+    items.sort((a, b) => a.anchorX - b.anchorX)
+    const channelTop = rowY[row] + rowHeights[row]
+    const channelBottom = rowY[row + 1] ?? channelTop + ROW_GAP
+    items.forEach((item, index) => {
+      const busY = Math.min(channelTop + BUS_OFFSET + index * BUS_STEP, channelBottom - 10)
+      lines.push(item.build(busY))
+    })
   }
 
   // Irregular cross-row links (generation conflicts): plain elbow fallback.

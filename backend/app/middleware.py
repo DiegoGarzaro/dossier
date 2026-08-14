@@ -41,6 +41,13 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 )
         response = await call_next(request)
         response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        if request.url.path.startswith("/api"):
+            # Personal records must not be written to a browser's disk cache or
+            # held by an intermediary proxy; a cached /api/auth/status would
+            # also let a stale "not authenticated" outlive the login that
+            # replaced it (G-51). `setdefault` keeps the stricter
+            # `private, no-store` that file downloads already declare (G-11).
+            response.headers.setdefault("Cache-Control", "no-store")
         if CSRF_COOKIE not in request.cookies:
             secure = get_settings().trust_proxy or request.url.scheme == "https"
             response.set_cookie(

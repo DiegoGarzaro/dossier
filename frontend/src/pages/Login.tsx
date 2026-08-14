@@ -5,7 +5,7 @@ import { FolderLock } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 
-import { Button, Input, Spinner } from '../components/ui'
+import { Button, Card, Input, Spinner } from '../components/ui'
 import { ApiError, api } from '../lib/api'
 import type { AuthStatus } from '../lib/types'
 import { useAuthStatus } from '../router'
@@ -20,9 +20,14 @@ export function Login() {
   const login = useMutation({
     mutationFn: () =>
       api<AuthStatus>('/api/auth/login', { method: 'POST', body: { username, password } }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['auth'] })
-      navigate('/')
+    // The login response *is* the authoritative auth status, so seed the cache
+    // with it rather than re-deriving it from a second round-trip: a failed or
+    // stale `GET /api/auth/status` used to bounce the user straight back to a
+    // freshly-mounted (= cleared) form, session cookie set and no error shown
+    // — the "I have to refresh to get in" bug (G-48).
+    onSuccess: (status) => {
+      queryClient.setQueryData(['auth'], status)
+      navigate('/', { replace: true })
     },
   })
 
@@ -37,11 +42,14 @@ export function Login() {
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-8 shadow-(--shadow-card)">
-        <div className="mb-6 flex items-center gap-2">
-          <FolderLock size={22} className="text-accent" aria-hidden />
-          <h1 className="font-display text-2xl font-semibold">Dossier</h1>
+      <Card className="w-full max-w-sm p-6 sm:p-8">
+        <div className="mb-1 flex items-center gap-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-fill text-accent">
+            <FolderLock size={20} aria-hidden />
+          </span>
+          <h1 className="font-display text-h1 font-semibold">Dossier</h1>
         </div>
+        <p className="mb-6 font-display text-sm text-muted italic">Your people, on file.</p>
         <form onSubmit={onSubmit} className="space-y-4">
           <Input
             id="username"
@@ -70,7 +78,7 @@ export function Login() {
             {login.isPending ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
-      </div>
+      </Card>
     </div>
   )
 }

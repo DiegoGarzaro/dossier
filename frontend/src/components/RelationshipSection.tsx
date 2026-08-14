@@ -1,4 +1,5 @@
-/** Relationships section on the ID-card: grouped chips, add/remove (Epic E, Design System §5.5). */
+/** Relationships section on the person record: grouped chips, add/remove
+ * (Epic E, Design System §5.5). */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Network, Plus, X } from 'lucide-react'
@@ -12,7 +13,7 @@ import type {
   RelationshipRole,
   RelationshipType,
 } from '../lib/types'
-import { Avatar, Button, Dialog, Input, SectionHeading } from './ui'
+import { Avatar, Button, Dialog, Input, SectionRule } from './ui'
 
 /** What the related person is *to* this card's person; a role implies its type (G-31). */
 interface RelationshipOption {
@@ -94,14 +95,14 @@ function RelationshipChip({
   return (
     <Link
       to={`/people/${relationship.person_id}`}
-      className="group inline-flex items-center gap-2 rounded-full border border-border bg-surface py-1 pr-1 pl-1.5 text-sm transition-colors hover:bg-surface-hover"
+      className="group inline-flex items-center gap-1.5 rounded-full border border-border bg-surface py-2 pr-1.5 pl-1.5 text-sm transition-colors hover:bg-surface-hover"
     >
       <Avatar name={relationship.person_name} size={20} />
       {relationship.person_name}
       <button
         type="button"
         aria-label={`Remove relationship with ${relationship.person_name}`}
-        className="rounded-full p-0.5 text-subtle opacity-0 transition-opacity hover:bg-surface-hover hover:text-danger group-hover:opacity-100"
+        className="relative rounded-full p-2 text-subtle opacity-100 before:absolute before:-inset-2 before:content-[''] transition-opacity hover:bg-surface-hover hover:text-danger can-hover:opacity-0 can-hover:group-hover:opacity-100"
         onClick={(event) => {
           event.preventDefault()
           event.stopPropagation()
@@ -274,31 +275,41 @@ export function RelationshipSection({
 
   return (
     <>
-      <SectionHeading
+      <SectionRule
         title="Relationships"
+        count={relationships.length}
         action={
-          <div className="flex gap-2">
+          /* Labels hide below sm: two full-length buttons plus the rule would
+             overflow a phone viewport; the icons carry the action there. */
+          <div className="flex items-center">
             {relationships.length > 0 && (
-              <Link to={`/people/${personId}/tree`}>
-                <Button variant="ghost" size="sm">
-                  <Network size={14} aria-hidden /> View tree
+              <Link to={`/people/${personId}/tree`} aria-label="View tree">
+                <Button variant="ghost" size="sm" aria-label="View tree">
+                  <Network size={14} aria-hidden />
+                  <span className="hidden sm:inline">View tree</span>
                 </Button>
               </Link>
             )}
-            <Button variant="secondary" size="sm" onClick={() => setAdding(true)}>
-              <Plus size={14} aria-hidden /> Add relationship
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Add relationship"
+              onClick={() => setAdding(true)}
+            >
+              <Plus size={14} aria-hidden />
+              <span className="hidden sm:inline">Add relationship</span>
             </Button>
           </div>
         }
       />
       {relationships.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-muted">No relationships yet.</p>
+        <p className="py-6 text-sm text-muted">No relationships yet.</p>
       ) : (
-        <div className="space-y-4 px-4 py-4">
+        <div className="mt-4 space-y-4">
           {groupByLabel(relationships).map(([label, items]) => (
             <div key={label}>
               <p className="label-caps mb-2">{label}</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-4">
                 {items.map((relationship) => (
                   <RelationshipChip
                     key={relationship.id}

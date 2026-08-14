@@ -2,7 +2,7 @@
 
 import { useQuery } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { Navigate, Outlet, createBrowserRouter } from 'react-router-dom'
+import { Navigate, Outlet, type RouteObject, createBrowserRouter } from 'react-router-dom'
 
 import { Spinner } from './components/ui'
 import { TopBar } from './components/TopBar'
@@ -41,7 +41,8 @@ function AppLayout() {
   )
 }
 
-export const router = createBrowserRouter([
+/** The route table, exported so tests can mount it in a memory router. */
+export const routes: RouteObject[] = [
   { path: '/login', element: <Login /> },
   { path: '/setup', element: <FirstRun /> },
   {
@@ -53,4 +54,6 @@ export const router = createBrowserRouter([
       { path: '/settings', element: <SettingsPage /> },
     ],
   },
-])
+]
+
+export const router = createBrowserRouter(routes)

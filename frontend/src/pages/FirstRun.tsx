@@ -5,7 +5,7 @@ import { FolderLock } from 'lucide-react'
 import { type FormEvent, useState } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 
-import { Button, Input, Spinner } from '../components/ui'
+import { Button, Card, Input, Spinner } from '../components/ui'
 import { ApiError, api } from '../lib/api'
 import type { AuthStatus } from '../lib/types'
 import { useAuthStatus } from '../router'
@@ -22,9 +22,10 @@ export function FirstRun() {
   const setup = useMutation({
     mutationFn: () =>
       api<AuthStatus>('/api/auth/setup', { method: 'POST', body: { username, password } }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['auth'] })
-      navigate('/')
+    // Same rule as Login: trust the response we just got, don't re-fetch it (G-48).
+    onSuccess: (status) => {
+      queryClient.setQueryData(['auth'], status)
+      navigate('/', { replace: true })
     },
   })
 
@@ -49,10 +50,12 @@ export function FirstRun() {
 
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
-      <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-8 shadow-(--shadow-card)">
-        <div className="mb-2 flex items-center gap-2">
-          <FolderLock size={22} className="text-accent" aria-hidden />
-          <h1 className="font-display text-2xl font-semibold">Welcome</h1>
+      <Card className="w-full max-w-sm p-6 sm:p-8">
+        <div className="mb-2 flex items-center gap-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-accent-fill text-accent">
+            <FolderLock size={20} aria-hidden />
+          </span>
+          <h1 className="font-display text-h1 font-semibold">Welcome</h1>
         </div>
         <p className="mb-6 text-sm text-muted">
           Set up the administrator account for Dossier. There are no default credentials.
@@ -95,7 +98,7 @@ export function FirstRun() {
             {setup.isPending ? 'Creating…' : 'Create account'}
           </Button>
         </form>
-      </div>
+      </Card>
     </div>
   )
 }

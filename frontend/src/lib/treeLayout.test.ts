@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { TreeEdge, TreeNode, TreeOut } from './types'
-import { COUPLE_GAP, layoutTree } from './treeLayout'
+import { BUS_STEP, COUPLE_GAP, layoutTree } from './treeLayout'
 
 const CHIP = { width: 100, height: 40 }
 
@@ -149,5 +149,53 @@ describe('layoutTree', () => {
     const rails = result.lines.filter((line) => line.kind === 'parent')
     expect(rails).toHaveLength(2)
     expect(rails[0].midY).not.toBe(rails[1].midY)
+  })
+
+  it('routes a peer tie around in-between chips as a right-angle elbow, not a curve', () => {
+    // A—C with B between them: the tie must drop into the row's channel and
+    // run as an elbow like every other sub-chip connector, not dip as a
+    // quadratic that grazes the family-bus rails (G-60).
+    const result = layout({
+      center_id: 1,
+      nodes: [node(1, 0), node(2, 0), node(3, 0)],
+      edges: [edge(1, 3, 'sibling')],
+    })
+    const tie = result.lines.find((line) => line.kind === 'sibling')
+    expect(tie).toBeDefined()
+    expect(tie!.path).not.toContain('Q')
+    const rowBottom = result.positions.get(1)!.y + CHIP.height
+    expect(tie!.midY).toBeGreaterThan(rowBottom)
+  })
+
+  it('staggers a peer tie and the family buses sharing its channel', () => {
+    // Two couples with a child each, plus a friend tie between the heads:
+    // three connectors in one channel, each at its own depth.
+    const result = layout({
+      center_id: 1,
+      nodes: [
+        node(1, 0),
+        node(2, 0),
+        node(3, 0),
+        node(4, 0),
+        node(5, 1),
+        node(6, 1),
+      ],
+      edges: [
+        edge(1, 2, 'spouse'),
+        edge(3, 4, 'spouse'),
+        edge(1, 5, 'parent'),
+        edge(2, 5, 'parent'),
+        edge(3, 6, 'parent'),
+        edge(4, 6, 'parent'),
+        edge(1, 3, 'friend'),
+      ],
+    })
+    const tie = result.lines.find((line) => line.kind === 'friend')
+    const buses = result.lines.filter((line) => line.kind === 'parent')
+    expect(tie).toBeDefined()
+    expect(buses).toHaveLength(2)
+    for (const bus of buses) {
+      expect(Math.abs(bus.midY - tie!.midY)).toBeGreaterThanOrEqual(BUS_STEP)
+    }
   })
 })

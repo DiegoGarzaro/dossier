@@ -5,7 +5,7 @@ import { ArrowLeft, Users } from 'lucide-react'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 
-import { Avatar, Button, EmptyState, Spinner } from '../components/ui'
+import { Avatar, Button, Card, EmptyState, Spinner } from '../components/ui'
 import { ApiError, api } from '../lib/api'
 import { ROW_GAP, layoutTree, type ChipSize, type TreeLayout } from '../lib/treeLayout'
 import type { RelationshipType, TreeOut } from '../lib/types'
@@ -100,12 +100,12 @@ export function TreePage() {
         <div>
           <Link
             to={`/people/${personId}`}
-            className="mb-1 inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink"
+            className="relative mb-1 inline-flex items-center gap-1.5 text-sm text-muted before:absolute before:-inset-3 before:content-[''] hover:text-ink"
           >
             <ArrowLeft size={14} aria-hidden /> Back to card
           </Link>
           <p className="label-caps">Relationship tree</p>
-          <h1 className="font-display text-3xl leading-tight font-semibold">
+          <h1 className="font-display text-h1 leading-tight font-semibold text-balance sm:text-display">
             {center?.full_name}
           </h1>
         </div>
@@ -132,7 +132,7 @@ export function TreePage() {
       </div>
 
       {data.edges.length === 0 ? (
-        <div className="rounded-lg border border-border bg-surface shadow-(--shadow-card)">
+        <Card>
           <EmptyState
             icon={<Users size={32} aria-hidden />}
             message="No relationships yet. Add one from the card to grow the tree."
@@ -142,9 +142,9 @@ export function TreePage() {
               </Link>
             }
           />
-        </div>
+        </Card>
       ) : (
-        <div className="rounded-lg border border-border bg-surface shadow-(--shadow-card)">
+        <Card>
           <div ref={scrollRef} className="overflow-x-auto">
             <div
               className="relative"
@@ -203,7 +203,7 @@ export function TreePage() {
                       else nodeEls.current.delete(node.id)
                     }}
                     style={position ? { left: position.x, top: position.y } : undefined}
-                    className={`absolute inline-flex items-center gap-2 rounded-full border bg-surface py-1.5 pr-3.5 pl-1.5 text-sm font-medium whitespace-nowrap shadow-(--shadow-card) transition-all hover:-translate-y-0.5 hover:shadow-(--shadow-raised) ${
+                    className={`absolute inline-flex items-center gap-2 rounded-full border bg-surface py-1.5 pr-3.5 pl-1.5 text-sm font-medium whitespace-nowrap shadow-card transition-all hover:-translate-y-0.5 hover:shadow-raised ${
                       node.id === data.center_id ? 'border-2 border-seal' : 'border-border'
                     } ${position ? '' : 'invisible'}`}
                     aria-current={node.id === data.center_id ? 'page' : undefined}
@@ -222,7 +222,7 @@ export function TreePage() {
               })}
             </div>
           </div>
-        </div>
+        </Card>
       )}
     </div>
   )

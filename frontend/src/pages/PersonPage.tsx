@@ -1,13 +1,18 @@
-/** The ID-card screen — the centerpiece of the product (FR-7, Design System §5.3). */
+/** The person record — an open letterhead, the centerpiece of the product
+ * (FR-7, Design System §5.3). No card chrome: a centered masthead (photo,
+ * serif name, file meta, tags) on the bare paper background, then sections
+ * ruled off with small-caps markers and hairlines. */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  ArrowLeft,
   Camera,
   Check,
   Contact,
   Download,
   FileJson,
   FileText,
+  MoreVertical,
   Pencil,
   Plus,
   Star,
@@ -16,12 +21,21 @@ import {
   X,
 } from 'lucide-react'
 import { type DragEvent, type FormEvent, useEffect, useRef, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 
-import { FieldRow, ValueInput } from '../components/FieldRow'
+import { FieldRow, FieldValue, ValueInput } from '../components/FieldRow'
 import { RelationshipSection } from '../components/RelationshipSection'
 import { TagsSection } from '../components/TagsSection'
-import { Avatar, Button, Dialog, Input, SectionHeading, Spinner } from '../components/ui'
+import {
+  Avatar,
+  Button,
+  Dialog,
+  EmptyState,
+  IconButton,
+  Input,
+  SectionRule,
+  Spinner,
+} from '../components/ui'
 import { ApiError, api } from '../lib/api'
 import type { DocumentOut, FieldOut, FieldType, PersonDetail } from '../lib/types'
 import { useFlip } from '../lib/useFlip'
@@ -39,6 +53,104 @@ function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
+/** The ⋯ menu in the utility row: rename, exports and the danger action live
+ * here so the record itself stays free of button chrome. */
+function RecordMenu({
+  personId,
+  onRename,
+  onDelete,
+}: {
+  personId: number
+  onRename: () => void
+  onDelete: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const close = () => setOpen(false)
+
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
+  const itemClass =
+    'flex w-full items-center gap-2.5 px-3 py-2.5 text-sm transition-colors hover:bg-surface-hover'
+
+  return (
+    <div className="relative">
+      <IconButton
+        label="More actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="text-muted hover:bg-surface-hover hover:text-ink"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <MoreVertical size={18} />
+      </IconButton>
+      {open && (
+        <>
+          {/* Click-away layer, same pattern as the Dialog scrim. */}
+          <button
+            type="button"
+            aria-hidden
+            tabIndex={-1}
+            className="fixed inset-0 z-40 cursor-default"
+            onClick={close}
+          />
+          <div
+            role="menu"
+            aria-label="Record actions"
+            className="absolute right-0 z-50 mt-1 w-52 rounded-md border border-border bg-surface py-1 shadow-raised"
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className={`${itemClass} text-ink`}
+              onClick={() => {
+                close()
+                onRename()
+              }}
+            >
+              <Pencil size={15} className="text-subtle" aria-hidden /> Rename person
+            </button>
+            <a
+              role="menuitem"
+              className={`${itemClass} text-ink`}
+              href={`/api/people/${personId}/vcard`}
+              onClick={close}
+            >
+              <Contact size={15} className="text-subtle" aria-hidden /> Export vCard
+            </a>
+            <a
+              role="menuitem"
+              className={`${itemClass} text-ink`}
+              href={`/api/people/${personId}/export`}
+              onClick={close}
+            >
+              <FileJson size={15} className="text-subtle" aria-hidden /> Export JSON
+            </a>
+            <div aria-hidden className="mx-3 my-1 h-px bg-border" />
+            <button
+              type="button"
+              role="menuitem"
+              className={`${itemClass} text-danger`}
+              onClick={() => {
+                close()
+                onDelete()
+              }}
+            >
+              <Trash2 size={15} aria-hidden /> Delete person
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  )
 }
 
 function AddFieldForm({ personId, onDone }: { personId: number; onDone: () => void }) {
@@ -65,7 +177,10 @@ function AddFieldForm({ personId, onDone }: { personId: number; onDone: () => vo
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-3 border-b border-border bg-surface-subtle px-4 py-4">
+    <form
+      onSubmit={onSubmit}
+      className="space-y-3 rounded-md border border-border bg-surface px-4 py-4"
+    >
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Input
           id="field-label"
@@ -148,9 +263,9 @@ function DocumentRow({ document, personId }: { document: DocumentOut; personId: 
           event.preventDefault()
           rename.mutate()
         }}
-        className="flex items-center gap-3 px-4 py-3 odd:bg-surface-subtle"
+        className="flex items-center gap-2 py-2 sm:gap-3"
       >
-        <FileText size={18} className="shrink-0 text-subtle" aria-hidden />
+        <FileText size={18} className="hidden shrink-0 text-subtle sm:block" aria-hidden />
         <div className="min-w-0 flex-1">
           <input
             aria-label="Document title"
@@ -187,8 +302,8 @@ function DocumentRow({ document, personId }: { document: DocumentOut; personId: 
   }
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 odd:bg-surface-subtle">
-      <FileText size={18} className="shrink-0 text-subtle" aria-hidden />
+    <div className="group flex items-center gap-1 py-3 transition-colors hover:bg-surface sm:gap-3">
+      <FileText size={18} className="hidden shrink-0 text-subtle sm:block" aria-hidden />
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{document.title}</p>
         <p className="truncate font-mono text-xs text-muted">
@@ -196,29 +311,29 @@ function DocumentRow({ document, personId }: { document: DocumentOut; personId: 
           {document.uploaded_at.slice(0, 10)}
         </p>
       </div>
-      <a
-        href={`/api/documents/${document.id}/download`}
-        aria-label={`Download ${document.title}`}
-        className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink"
-      >
-        <Download size={16} />
-      </a>
-      <button
-        type="button"
-        aria-label={`Rename ${document.title}`}
-        className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink"
-        onClick={() => setRenaming(true)}
-      >
-        <Pencil size={16} />
-      </button>
-      <button
-        type="button"
-        aria-label={`Delete ${document.title}`}
-        className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-danger"
-        onClick={() => setConfirming(true)}
-      >
-        <Trash2 size={16} />
-      </button>
+      <div className="flex shrink-0 items-center opacity-100 transition-opacity duration-150 can-hover:opacity-0 can-hover:group-focus-within:opacity-100 can-hover:group-hover:opacity-100">
+        <a
+          href={`/api/documents/${document.id}/download`}
+          aria-label={`Download ${document.title}`}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-subtle transition-colors hover:bg-surface-hover hover:text-ink sm:h-8 sm:w-8"
+        >
+          <Download size={16} />
+        </a>
+        <IconButton
+          label={`Rename ${document.title}`}
+          className="text-subtle hover:bg-surface-hover hover:text-ink"
+          onClick={() => setRenaming(true)}
+        >
+          <Pencil size={16} />
+        </IconButton>
+        <IconButton
+          label={`Delete ${document.title}`}
+          className="text-subtle hover:bg-surface-hover hover:text-danger"
+          onClick={() => setConfirming(true)}
+        >
+          <Trash2 size={16} />
+        </IconButton>
+      </div>
       {confirming && (
         <Dialog title="Delete document?" onClose={() => setConfirming(false)}>
           <p className="mb-4 text-sm text-muted">
@@ -368,7 +483,19 @@ export function PersonPage() {
 
   if (person.isPending) return <Spinner />
   if (person.error instanceof ApiError && person.error.status === 404) {
-    return <p className="text-muted">This person no longer exists.</p>
+    return (
+      <div className="mx-auto max-w-2xl pt-10">
+        <EmptyState
+          icon={<Contact size={26} aria-hidden />}
+          message="This person no longer exists."
+          action={
+            <Button variant="secondary" onClick={() => navigate('/')}>
+              Back to people
+            </Button>
+          }
+        />
+      </div>
+    )
   }
   if (!person.data) return <Spinner />
 
@@ -376,155 +503,174 @@ export function PersonPage() {
   const pinned = detail.fields.filter((field) => field.is_pinned)
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      {/* ID-card */}
-      <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-(--shadow-card)">
-        <div className="flex flex-col gap-5 p-6 sm:flex-row sm:items-start">
-          <button
-            type="button"
-            className="group relative shrink-0 self-center rounded-full sm:self-start"
-            aria-label="Change profile photo"
-            onClick={() => photoInput.current?.click()}
+    <div className="mx-auto max-w-2xl">
+      {/* Utility row: wayfinding left, record actions right. */}
+      <div className="flex items-center justify-between gap-2">
+        <Link
+          to="/"
+          className="inline-flex h-11 items-center gap-1.5 rounded-md px-2 text-sm text-muted transition-colors hover:bg-surface-hover hover:text-ink sm:h-9"
+        >
+          <ArrowLeft size={16} aria-hidden /> All people
+        </Link>
+        <div className="flex items-center">
+          <IconButton
+            label={detail.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+            className={`hover:bg-surface-hover ${detail.is_favorite ? 'text-seal' : 'text-muted hover:text-ink'}`}
+            onClick={() => favorite.mutate(!detail.is_favorite)}
+            disabled={favorite.isPending}
           >
-            <Avatar
-              name={detail.full_name}
-              photoUrl={
-                detail.has_photo
-                  ? `/api/people/${detail.id}/photo?v=${detail.updated_at}`
-                  : undefined
-              }
-              size={96}
-            />
-            <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 text-white opacity-0 transition-opacity group-hover:opacity-100">
-              <Camera size={20} aria-hidden />
-            </span>
-          </button>
-          <input
-            ref={photoInput}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            className="hidden"
-            onChange={(event) => {
-              const file = event.target.files?.[0]
-              if (file) uploadPhoto.mutate(file)
-              event.target.value = ''
+            <Star size={18} fill={detail.is_favorite ? 'currentColor' : 'none'} />
+          </IconButton>
+          <RecordMenu
+            personId={detail.id}
+            onRename={() => {
+              setNewName(detail.full_name)
+              setRenaming(true)
             }}
+            onDelete={() => setConfirmingDelete(true)}
           />
-          <div className="min-w-0 flex-1">
-            <div className="flex items-start gap-2">
-              <h1 className="font-display text-3xl leading-tight font-semibold">
-                {detail.full_name}
-              </h1>
-              <button
-                type="button"
-                aria-label="Rename person"
-                className="mt-1.5 rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink"
-                onClick={() => {
-                  setNewName(detail.full_name)
-                  setRenaming(true)
-                }}
-              >
-                <Pencil size={15} />
-              </button>
-              <button
-                type="button"
-                aria-label={detail.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
-                className={`mt-1.5 rounded p-1.5 hover:bg-surface-hover ${detail.is_favorite ? 'text-seal' : 'text-subtle hover:text-ink'}`}
-                onClick={() => favorite.mutate(!detail.is_favorite)}
-                disabled={favorite.isPending}
-              >
-                <Star size={15} fill={detail.is_favorite ? 'currentColor' : 'none'} />
-              </button>
-            </div>
-            {pinned.length > 0 && (
-              <dl className="mt-4 space-y-2 border-l-2 border-seal pl-3">
-                {pinned.map((field) => (
-                  <div
-                    key={field.id}
-                    className="grid grid-cols-[minmax(120px,240px)_1fr] items-baseline gap-x-3"
-                  >
-                    <dt className="label-caps min-w-0 break-words">{field.label}</dt>
-                    <dd className="min-w-0 text-[15px] break-words">
-                      {field.value ? (
-                        <span className={field.type === 'text' ? undefined : 'font-mono'}>
-                          {field.type === 'sensitive' ? '••••••••' : field.value}
-                        </span>
-                      ) : (
-                        <span className="text-subtle">—</span>
-                      )}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            )}
-          </div>
         </div>
+      </div>
 
-        {/* Tags */}
+      {/* Masthead */}
+      <header className="mt-8 flex flex-col items-center text-center">
+        <button
+          type="button"
+          className="group relative shrink-0 rounded-full"
+          aria-label="Change profile photo"
+          onClick={() => photoInput.current?.click()}
+        >
+          <Avatar
+            name={detail.full_name}
+            photoUrl={
+              detail.has_photo ? `/api/people/${detail.id}/photo?v=${detail.updated_at}` : undefined
+            }
+            size={112}
+          />
+          {/* Two affordances for the same tap: mouse gets a hover veil over
+              the photo; touch (no real hover) gets a persistent badge in the
+              corner instead — the veil would sit over the face permanently. */}
+          <span className="absolute inset-0 hidden items-center justify-center rounded-full bg-black/40 text-white transition-opacity can-hover:flex can-hover:opacity-0 can-hover:group-hover:opacity-100">
+            <Camera size={20} aria-hidden />
+          </span>
+          <span className="absolute -right-0.5 -bottom-0.5 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface text-muted shadow-sm can-hover:hidden">
+            <Camera size={14} aria-hidden />
+          </span>
+        </button>
+        <input
+          ref={photoInput}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className="hidden"
+          onChange={(event) => {
+            const file = event.target.files?.[0]
+            if (file) uploadPhoto.mutate(file)
+            event.target.value = ''
+          }}
+        />
+        <h1 className="mt-5 font-display text-h1 leading-tight font-semibold text-balance sm:text-display">
+          {detail.full_name}
+        </h1>
+        <p className="mt-2.5 font-mono text-xs tracking-wider text-subtle uppercase">
+          File № {String(detail.id).padStart(4, '0')} · Added {detail.created_at.slice(0, 10)}
+        </p>
         <TagsSection personId={detail.id} tags={detail.tags} />
+      </header>
 
-        {/* Fields */}
-        <SectionHeading
+      {/* Key facts — pinned fields set with dotted leaders, like a filled form. */}
+      {pinned.length > 0 && (
+        <section className="mt-12">
+          <SectionRule title="Key facts" />
+          <dl className="mt-5 space-y-3.5">
+            {pinned.map((field) => (
+              <div key={field.id} className="flex items-baseline gap-3">
+                <dt className="label-caps min-w-0 max-w-[45%] shrink-0 break-words">
+                  {field.label}
+                </dt>
+                <span
+                  aria-hidden
+                  className="min-w-6 flex-1 -translate-y-1 border-b border-dotted border-border-strong"
+                />
+                <dd className="min-w-0 max-w-[55%] text-right text-[15px] break-words">
+                  <FieldValue field={field} />
+                </dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+
+      {/* Fields */}
+      <section className="mt-12">
+        <SectionRule
           title="Fields"
+          count={orderedFields.length}
           action={
-            <Button variant="secondary" size="sm" onClick={() => setAddingField(true)}>
+            <Button variant="ghost" size="sm" onClick={() => setAddingField(true)}>
               <Plus size={14} aria-hidden /> Add field
             </Button>
           }
         />
-        {addingField && <AddFieldForm personId={detail.id} onDone={() => setAddingField(false)} />}
+        {addingField && (
+          <div className="mt-4">
+            <AddFieldForm personId={detail.id} onDone={() => setAddingField(false)} />
+          </div>
+        )}
         <div aria-live="polite" className="sr-only">
           {moveAnnouncement}
         </div>
-        <div>
-          {orderedFields.length === 0 && !addingField ? (
-            <p className="px-4 py-6 text-sm text-muted">No fields yet.</p>
-          ) : (
-            orderedFields.map((field, index) => {
+        {orderedFields.length === 0 && !addingField ? (
+          <p className="py-6 text-sm text-muted">No fields yet.</p>
+        ) : (
+          <div className="mt-1 divide-y divide-border">
+            {orderedFields.map((field, index) => {
               const draggedIndex = orderedFields.findIndex((f) => f.id === dragState.draggedId)
               return (
-              <FieldRow
-                key={field.id}
-                field={field}
-                personId={detail.id}
-                position={index + 1}
-                count={orderedFields.length}
-                rowRef={registerFlip(field.id)}
-                onMoveUp={() => moveField(index, index - 1)}
-                onMoveDown={() => moveField(index, index + 1)}
-                onDragHandleStart={() => setDragState({ draggedId: field.id, overId: null })}
-                onDragHandleEnd={() => setDragState({ draggedId: null, overId: null })}
-                onRowDragOver={(event: DragEvent) => {
-                  if (dragState.draggedId === null) return
-                  const fromIndex = orderedFields.findIndex((f) => f.id === dragState.draggedId)
-                  if (fromIndex === -1 || groupOf(fromIndex) !== groupOf(index)) {
-                    // Different group (system/pinned/unpinned): refuse the drop
-                    // outright (no preventDefault) so the cursor shows "not
-                    // allowed" instead of silently doing nothing once dropped.
-                    event.dataTransfer.dropEffect = 'none'
-                    return
-                  }
-                  event.preventDefault()
-                  setDragState((current) =>
-                    current.overId === field.id ? current : { ...current, overId: field.id },
-                  )
-                }}
-                onRowDrop={() => onRowDrop(index)}
-                isDragSource={dragState.draggedId === field.id}
-                isDropTarget={dragState.overId === field.id && dragState.draggedId !== field.id}
-                dropEdge={draggedIndex !== -1 && draggedIndex < index ? 'bottom' : 'top'}
-              />
+                <FieldRow
+                  key={field.id}
+                  field={field}
+                  personId={detail.id}
+                  position={index + 1}
+                  count={orderedFields.length}
+                  rowRef={registerFlip(field.id)}
+                  onMoveUp={() => moveField(index, index - 1)}
+                  onMoveDown={() => moveField(index, index + 1)}
+                  onDragHandleStart={() => setDragState({ draggedId: field.id, overId: null })}
+                  onDragHandleEnd={() => setDragState({ draggedId: null, overId: null })}
+                  onRowDragOver={(event: DragEvent) => {
+                    if (dragState.draggedId === null) return
+                    const fromIndex = orderedFields.findIndex((f) => f.id === dragState.draggedId)
+                    if (fromIndex === -1 || groupOf(fromIndex) !== groupOf(index)) {
+                      // Different group (system/pinned/unpinned): refuse the drop
+                      // outright (no preventDefault) so the cursor shows "not
+                      // allowed" instead of silently doing nothing once dropped.
+                      event.dataTransfer.dropEffect = 'none'
+                      return
+                    }
+                    event.preventDefault()
+                    setDragState((current) =>
+                      current.overId === field.id ? current : { ...current, overId: field.id },
+                    )
+                  }}
+                  onRowDrop={() => onRowDrop(index)}
+                  isDragSource={dragState.draggedId === field.id}
+                  isDropTarget={dragState.overId === field.id && dragState.draggedId !== field.id}
+                  dropEdge={draggedIndex !== -1 && draggedIndex < index ? 'bottom' : 'top'}
+                />
               )
-            })
-          )}
-        </div>
+            })}
+          </div>
+        )}
+      </section>
 
-        {/* Documents */}
-        <SectionHeading
+      {/* Documents */}
+      <section className="mt-12">
+        <SectionRule
           title="Documents"
+          count={detail.documents.length}
           action={
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
               onClick={() => documentInput.current?.click()}
               disabled={uploadDocument.isPending}
@@ -546,41 +692,30 @@ export function PersonPage() {
           }}
         />
         {uploadError && (
-          <p role="alert" className="px-4 py-2 text-sm text-danger">
+          <p role="alert" className="mt-2 text-sm text-danger">
             {uploadError}
           </p>
         )}
         {detail.documents.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-muted">No documents yet.</p>
+          <p className="py-6 text-sm text-muted">No documents yet.</p>
         ) : (
-          detail.documents.map((document) => (
-            <DocumentRow key={document.id} document={document} personId={detail.id} />
-          ))
+          <div className="mt-1 divide-y divide-border">
+            {detail.documents.map((document) => (
+              <DocumentRow key={document.id} document={document} personId={detail.id} />
+            ))}
+          </div>
         )}
+      </section>
 
-        {/* Relationships */}
+      {/* Relationships */}
+      <section className="mt-12">
         <RelationshipSection personId={detail.id} relationships={detail.relationships} />
-      </div>
+      </section>
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <a
-            href={`/api/people/${detail.id}/vcard`}
-            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:bg-surface-hover"
-          >
-            <Contact size={14} aria-hidden /> Export vCard
-          </a>
-          <a
-            href={`/api/people/${detail.id}/export`}
-            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:bg-surface-hover"
-          >
-            <FileJson size={14} aria-hidden /> Export JSON
-          </a>
-        </div>
-        <Button variant="danger" size="sm" onClick={() => setConfirmingDelete(true)}>
-          <Trash2 size={14} aria-hidden /> Delete person
-        </Button>
-      </div>
+      {/* Archival stamp line. */}
+      <p className="mt-16 text-center font-mono text-[11px] tracking-wider text-subtle uppercase">
+        Last updated {detail.updated_at.slice(0, 10)}
+      </p>
 
       {renaming && (
         <Dialog title="Rename person" onClose={() => setRenaming(false)}>

@@ -5,7 +5,7 @@ import { Plus, Search, Star, Users, X } from 'lucide-react'
 import { type FormEvent, useDeferredValue, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 
-import { Avatar, Button, Dialog, EmptyState, Input, Spinner } from '../components/ui'
+import { Avatar, Button, Dialog, EmptyState, IconButton, Input, Spinner } from '../components/ui'
 import { api } from '../lib/api'
 import type { PersonDetail, PersonSummary, Tag } from '../lib/types'
 
@@ -23,12 +23,11 @@ function PersonCard({ person }: { person: PersonSummary }) {
   return (
     <Link
       to={`/people/${person.id}`}
-      className="relative rounded-lg border border-border bg-surface p-5 shadow-(--shadow-card) transition-all hover:-translate-y-0.5 hover:shadow-(--shadow-raised)"
+      className="relative rounded-lg border border-border bg-surface p-5 shadow-card transition-all hover:-translate-y-0.5 hover:border-border-strong hover:shadow-raised"
     >
-      <button
-        type="button"
-        aria-label={person.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
-        className={`absolute top-3 right-3 rounded-full p-1.5 hover:bg-surface-hover ${person.is_favorite ? 'text-seal' : 'text-subtle hover:text-ink'}`}
+      <IconButton
+        label={person.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+        className={`absolute top-2 right-2 hover:bg-surface-hover ${person.is_favorite ? 'text-seal' : 'text-subtle hover:text-ink'}`}
         disabled={favorite.isPending}
         onClick={(event) => {
           // The card itself is a link; the star must act without navigating.
@@ -38,7 +37,7 @@ function PersonCard({ person }: { person: PersonSummary }) {
         }}
       >
         <Star size={16} fill={person.is_favorite ? 'currentColor' : 'none'} />
-      </button>
+      </IconButton>
       <div className="flex items-center gap-4">
         <Avatar
           name={person.full_name}
@@ -49,7 +48,7 @@ function PersonCard({ person }: { person: PersonSummary }) {
           }
         />
         <div className="min-w-0">
-          <h2 className="truncate pr-6 font-display text-lg font-semibold">{person.full_name}</h2>
+          <h2 className="truncate pr-9 font-display text-h3 font-semibold">{person.full_name}</h2>
           {person.pinned_fields.map((field) => (
             <p key={field.id} className="truncate text-sm text-muted">
               {field.value}
@@ -95,12 +94,12 @@ function TagFilterBar({
 }) {
   const active = selected.length > 0 || favoritesOnly
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0">
       <button
         type="button"
         aria-pressed={favoritesOnly}
         onClick={onToggleFavorites}
-        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+        className={`inline-flex h-11 shrink-0 snap-start items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors sm:h-8 ${
           favoritesOnly
             ? 'border-seal bg-seal-fill text-seal'
             : 'border-border bg-surface text-muted hover:bg-surface-hover hover:text-ink'
@@ -117,7 +116,7 @@ function TagFilterBar({
             type="button"
             aria-pressed={isSelected}
             onClick={() => onToggle(tag.id)}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+            className={`inline-flex h-11 shrink-0 snap-start items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors sm:h-8 ${
               isSelected
                 ? 'border-accent bg-accent-fill text-accent'
                 : 'border-border bg-surface text-muted hover:bg-surface-hover hover:text-ink'
@@ -132,7 +131,7 @@ function TagFilterBar({
         <button
           type="button"
           onClick={onClear}
-          className="inline-flex items-center gap-1 text-xs text-muted hover:text-ink"
+          className="inline-flex h-11 shrink-0 snap-start items-center gap-1 px-2 text-xs text-muted hover:text-ink sm:h-8"
         >
           <X size={12} aria-hidden /> Clear filters
         </button>
@@ -196,33 +195,33 @@ export function PeopleIndex() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="font-display text-3xl font-semibold">People</h1>
-        <div className="flex-1" />
-        <div className="flex flex-col items-end gap-1">
-          <div className="relative">
-            <Search size={16} className="absolute top-1/2 left-3 -translate-y-1/2 text-subtle" aria-hidden />
-            <Input
-              aria-label={searchFields ? 'Search people by name or field value' : 'Search people by name'}
-              placeholder={searchFields ? 'Search name & fields…' : 'Search…'}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              className="w-56 pl-9"
-            />
-          </div>
-          <label className="flex items-center gap-1.5 pr-1 text-xs text-muted select-none">
-            <input
-              type="checkbox"
-              checked={searchFields}
-              onChange={(event) => setSearchFields(event.target.checked)}
-              className="accent-accent"
-            />
-            Search field values too
-          </label>
-        </div>
-        <Button onClick={() => setAdding(true)}>
+      <div className="flex items-center justify-between gap-3">
+        <h1 className="font-display text-h2 font-semibold sm:text-h1">People</h1>
+        <Button onClick={() => setAdding(true)} className="shrink-0">
           <Plus size={16} aria-hidden /> Add person
         </Button>
+      </div>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+        <label className="order-2 flex min-h-11 w-full items-center gap-1.5 text-xs text-muted select-none sm:order-1 sm:min-h-0 sm:w-auto">
+          <input
+            type="checkbox"
+            checked={searchFields}
+            onChange={(event) => setSearchFields(event.target.checked)}
+            className="h-4 w-4 accent-accent"
+          />
+          Search field values too
+        </label>
+        <div className="relative order-1 w-full sm:order-2 sm:w-64">
+          <Search size={16} className="absolute top-1/2 left-3 -translate-y-1/2 text-subtle" aria-hidden />
+          <Input
+            aria-label={searchFields ? 'Search people by name or field value' : 'Search people by name'}
+            placeholder={searchFields ? 'Search name & fields…' : 'Search…'}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="w-full pl-9"
+          />
+        </div>
       </div>
 
       <TagFilterBar

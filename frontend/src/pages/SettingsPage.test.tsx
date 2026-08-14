@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '../lib/api'
 import type { SystemSummary, Tag } from '../lib/types'
-import { renderWithProviders } from '../test/utils'
+import { createTestQueryClient, renderWithProviders } from '../test/utils'
 import { SettingsPage } from './SettingsPage'
 
 const { mockApi, mockApiBlob } = vi.hoisted(() => ({ mockApi: vi.fn(), mockApiBlob: vi.fn() }))
@@ -87,6 +87,35 @@ describe('SettingsPage — tags admin', () => {
         method: 'PATCH',
         body: { name: 'Relatives' },
       }),
+    )
+  })
+
+  // G-55: a renamed tag is also a chip on every ID-card wearing it, and
+  // `['person', id]` is a different key prefix from `['people']` — those cards
+  // used to keep showing the old name with nothing scheduled to refresh them.
+  it('marks cached ID-cards stale when a tag is renamed', async () => {
+    mockApi.mockImplementation(async (path: string, options: { method?: string } = {}) => {
+      const method = options.method ?? 'GET'
+      if (path === '/api/tags' && method === 'GET') return [familyTag]
+      if (path === '/api/system/summary' && method === 'GET') return summary()
+      if (path === '/api/tags/10' && method === 'PATCH') return { ...familyTag, name: 'Relatives' }
+      if (path === '/api/people/7' && method === 'GET') return { id: 7, tags: [] }
+      throw new Error(`Unhandled request: ${method} ${path}`)
+    })
+    const queryClient = createTestQueryClient()
+    queryClient.setQueryData(['person', 7], { id: 7, tags: [familyTag] })
+
+    renderWithProviders(<SettingsPage />, { queryClient })
+    await screen.findByRole('heading', { name: 'Settings' })
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Rename Family' }))
+    const input = screen.getByRole('textbox', { name: 'Tag name' })
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Relatives')
+    await userEvent.click(screen.getByRole('button', { name: 'Save tag name' }))
+
+    await waitFor(() =>
+      expect(queryClient.getQueryState(['person', 7])?.isInvalidated).toBe(true),
     )
   })
 

@@ -2,24 +2,31 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
+  AlignLeft,
   ArrowUpDown,
   BadgeCheck,
+  Calendar,
   Check,
+  ChevronDown,
+  ChevronUp,
   Eye,
   EyeOff,
   Globe,
+  Hash,
   IdCard,
   MapPin,
   Pencil,
   Pin,
+  ToggleLeft,
   Trash2,
+  Type,
   X,
 } from 'lucide-react'
 import { type DragEvent, type FormEvent, type KeyboardEvent, useRef, useState } from 'react'
 
 import { api } from '../lib/api'
 import type { FieldOut, FieldType } from '../lib/types'
-import { Button } from './ui'
+import { Button, IconButton } from './ui'
 
 const MONO_TYPES: FieldType[] = ['number', 'date', 'sensitive']
 
@@ -30,17 +37,45 @@ const SYSTEM_FIELD_ICONS: Record<string, typeof IdCard> = {
   Nationality: Globe,
 }
 
+/** Type badge per field type (§2.4): monochrome metadata — boolean picks up
+ * the accent, sensitive a quieted seal (the eye toggle already carries the
+ * full seal color; two loud ambers per row read as decoration). */
+const TYPE_ICONS: Record<FieldType, { icon: typeof IdCard; tone: string }> = {
+  text: { icon: Type, tone: 'text-subtle' },
+  textarea: { icon: AlignLeft, tone: 'text-subtle' },
+  number: { icon: Hash, tone: 'text-subtle' },
+  date: { icon: Calendar, tone: 'text-subtle' },
+  boolean: { icon: ToggleLeft, tone: 'text-accent' },
+  sensitive: { icon: EyeOff, tone: 'text-seal/70' },
+}
+
+/** Zero-width break opportunities after punctuation, so long unbreakable
+ * labels (emails, codes) wrap at natural points — "name@\nexample.com"
+ * instead of "name@exa\nmple.com". Pure text, nothing is parsed as HTML. */
+const breakable = (text: string) => text.replace(/([@.\-_/:])/g, '$1\u200B')
+
+/** Icon + label with a hanging indent: the icon is pinned to the first line
+ * (absolute, so it never drives the cell's baseline) and wrapped lines align
+ * under the text. A flex row would take its baseline from the icon's bottom
+ * edge instead — with a two-line label that re-anchored the value column to
+ * the middle of the label (G-59). */
 function FieldLabel({ field }: { field: FieldOut }) {
-  // min-w-0 + break-words: long unbreakable labels (emails, codes) must wrap
-  // inside their grid column instead of colliding with the value column.
+  // min-w-0 + break-words: long labels must wrap inside their grid column
+  // instead of colliding with the value column.
   if (!field.is_system) {
-    return <span className="label-caps min-w-0 break-words">{field.label}</span>
+    const { icon: TypeIcon, tone } = TYPE_ICONS[field.type]
+    return (
+      <span className="label-caps relative block min-w-0 pl-[19px] break-words">
+        <TypeIcon size={13} className={`absolute top-[1.5px] left-0 ${tone}`} aria-hidden />
+        {breakable(field.label)}
+      </span>
+    )
   }
   const Icon = SYSTEM_FIELD_ICONS[field.label] ?? BadgeCheck
   return (
-    <span className="label-caps flex min-w-0 items-center gap-1.5">
-      <Icon size={14} className="shrink-0 text-subtle" aria-hidden />
-      <span className="min-w-0 break-words">{field.label}</span>
+    <span className="label-caps relative block min-w-0 pl-5 break-words">
+      <Icon size={14} className="absolute top-px left-0 text-subtle" aria-hidden />
+      {breakable(field.label)}
     </span>
   )
 }
@@ -57,10 +92,14 @@ export function FieldValue({ field }: { field: FieldOut }) {
     return (
       <span className="inline-flex items-center gap-2 font-mono text-[15px]">
         {revealed ? field.value : '••••••••'}
+        {/* Hit area stays at 31px (-inset-2) on purpose: several sensitive
+            rows can stack ~43px apart, and a 44px inset would bleed into the
+            neighbour and risk revealing the *wrong* secret — worse than a
+            smaller target. 31px still clears WCAG 2.5.8's 24px floor. */}
         <button
           type="button"
           aria-label={revealed ? 'Hide value' : 'Reveal value'}
-          className="text-seal hover:opacity-80"
+          className="relative text-seal before:absolute before:-inset-2 before:content-[''] hover:opacity-80"
           onClick={() => setRevealed((current) => !current)}
         >
           {revealed ? <EyeOff size={15} /> : <Eye size={15} />}
@@ -206,7 +245,7 @@ export function FieldRow({
   const dropIndicator = isDropTarget && (
     <span
       aria-hidden
-      className={`absolute inset-x-3 h-0.5 origin-left rounded-full bg-accent motion-safe:animate-[drop-in_160ms_ease-out] ${dropEdge === 'bottom' ? 'bottom-0' : 'top-0'}`}
+      className={`absolute inset-x-0 h-0.5 origin-left rounded-full bg-accent motion-safe:animate-[drop-in_160ms_ease-out] ${dropEdge === 'bottom' ? 'bottom-0' : 'top-0'}`}
     />
   )
 
@@ -216,7 +255,7 @@ export function FieldRow({
         ref={setRowEl}
         onSubmit={onSave}
         {...rowDragProps}
-        className="relative grid grid-cols-1 items-start gap-2 px-4 py-2 sm:grid-cols-[minmax(160px,1fr)_2fr_auto]"
+        className="relative grid grid-cols-1 items-start gap-2 py-3 sm:grid-cols-[minmax(160px,1fr)_2fr_auto]"
       >
         {dropIndicator}
         {field.is_system ? (
@@ -267,67 +306,85 @@ export function FieldRow({
     <div
       ref={setRowEl}
       {...rowDragProps}
-      className={`group relative grid grid-cols-1 items-baseline gap-x-2 px-4 py-2.5 transition-[background-color,opacity] duration-150 odd:bg-surface-subtle hover:bg-surface-hover sm:grid-cols-[minmax(160px,1fr)_2fr_auto] ${isDragSource ? 'opacity-40' : ''}`}
+      className={`group relative grid grid-cols-1 items-baseline gap-x-2 py-3 transition-[background-color,opacity] duration-150 hover:bg-surface sm:grid-cols-[minmax(160px,1fr)_2fr_auto] ${isDragSource ? 'opacity-40' : ''}`}
     >
       {dropIndicator}
       <FieldLabel field={field} />
       <span className="min-w-0 text-[15px] break-words">
         <FieldValue field={field} />
       </span>
-      <div className="flex gap-0.5 opacity-0 transition-opacity duration-150 group-focus-within:opacity-100 group-hover:opacity-100">
+      <div className="flex flex-wrap items-center gap-0.5 opacity-100 transition-opacity duration-150 can-hover:opacity-0 can-hover:group-focus-within:opacity-100 can-hover:group-hover:opacity-100">
         {!field.is_system && (
-          <button
-            type="button"
-            draggable
-            onDragStart={(event) => {
-              // Firefox refuses to start a drag unless data is set (G-20).
-              event.dataTransfer.setData('text/plain', field.label)
-              event.dataTransfer.effectAllowed = 'move'
-              if (rowEl.current) {
-                const rect = rowEl.current.getBoundingClientRect()
-                event.dataTransfer.setDragImage(
-                  rowEl.current,
-                  event.clientX - rect.left,
-                  event.clientY - rect.top,
-                )
-              }
-              onDragHandleStart()
-            }}
-            onDragEnd={() => onDragHandleEnd()}
-            onKeyDown={onHandleKeyDown}
-            aria-label={`Reorder ${field.label}, position ${position} of ${count}. Use arrow keys to move.`}
-            className="cursor-grab rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink active:cursor-grabbing"
-          >
-            <ArrowUpDown size={15} />
-          </button>
+          <>
+            {/* Touch: native HTML5 drag doesn't work on touchscreens, so these
+                explicit buttons are the reorder path there — hidden once a
+                mouse is available, where the drag handle below takes over. */}
+            <IconButton
+              label={`Move ${field.label} up`}
+              disabled={position === 1}
+              onClick={onMoveUp}
+              className="inline-flex text-subtle hover:bg-surface-hover hover:text-ink can-hover:hidden"
+            >
+              <ChevronUp size={15} />
+            </IconButton>
+            <IconButton
+              label={`Move ${field.label} down`}
+              disabled={position === count}
+              onClick={onMoveDown}
+              className="inline-flex text-subtle hover:bg-surface-hover hover:text-ink can-hover:hidden"
+            >
+              <ChevronDown size={15} />
+            </IconButton>
+            <button
+              type="button"
+              draggable
+              onDragStart={(event) => {
+                // Firefox refuses to start a drag unless data is set (G-20).
+                event.dataTransfer.setData('text/plain', field.label)
+                event.dataTransfer.effectAllowed = 'move'
+                if (rowEl.current) {
+                  const rect = rowEl.current.getBoundingClientRect()
+                  event.dataTransfer.setDragImage(
+                    rowEl.current,
+                    event.clientX - rect.left,
+                    event.clientY - rect.top,
+                  )
+                }
+                onDragHandleStart()
+              }}
+              onDragEnd={() => onDragHandleEnd()}
+              onKeyDown={onHandleKeyDown}
+              aria-label={`Reorder ${field.label}, position ${position} of ${count}. Use arrow keys to move.`}
+              className="hidden cursor-grab rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink active:cursor-grabbing can-hover:inline-flex"
+            >
+              <ArrowUpDown size={15} />
+            </button>
+          </>
         )}
         {!field.is_system && (
-          <button
-            type="button"
-            aria-label={field.is_pinned ? 'Unpin field' : 'Pin field to header'}
-            className={`rounded p-1.5 hover:bg-surface-hover ${field.is_pinned ? 'text-seal' : 'text-subtle hover:text-ink'}`}
+          <IconButton
+            label={field.is_pinned ? 'Unpin field' : 'Pin field to header'}
+            className={`hover:bg-surface-hover ${field.is_pinned ? 'text-seal' : 'text-subtle hover:text-ink'}`}
             onClick={() => update.mutate({ is_pinned: !field.is_pinned })}
           >
             <Pin size={15} />
-          </button>
+          </IconButton>
         )}
-        <button
-          type="button"
-          aria-label="Edit field"
-          className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink"
+        <IconButton
+          label="Edit field"
+          className="text-subtle hover:bg-surface-hover hover:text-ink"
           onClick={() => setEditing(true)}
         >
           <Pencil size={15} />
-        </button>
+        </IconButton>
         {!field.is_system && (
-          <button
-            type="button"
-            aria-label="Remove field"
-            className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-danger"
+          <IconButton
+            label="Remove field"
+            className="text-subtle hover:bg-surface-hover hover:text-danger"
             onClick={() => remove.mutate()}
           >
             <Trash2 size={15} />
-          </button>
+          </IconButton>
         )}
       </div>
     </div>

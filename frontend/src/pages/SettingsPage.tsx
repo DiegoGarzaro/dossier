@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, FileJson, Lock, Pencil, Trash2, Unlock, Upload, X } from 'lucide-react'
 import { type ChangeEvent, type FormEvent, useId, useState } from 'react'
 
-import { Button, Dialog, Input, SectionHeading } from '../components/ui'
+import { Button, Card, Dialog, IconButton, Input, SectionHeading } from '../components/ui'
 import { ApiError, api, apiBlob } from '../lib/api'
 import type { ImportReport, SystemSummary, Tag } from '../lib/types'
 
@@ -43,8 +43,8 @@ function DataSummaryCard() {
   })
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-6 shadow-(--shadow-card)">
-      <h2 className="mb-4 font-display text-lg font-semibold">Your data</h2>
+    <Card className="p-4 sm:p-6">
+      <h2 className="mb-4 font-display text-h2 font-semibold">Your data</h2>
       {summary.isPending ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : summary.data ? (
@@ -52,23 +52,23 @@ function DataSummaryCard() {
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3">
             <div>
               <dt className="label-caps">People</dt>
-              <dd className="text-lg font-semibold text-ink">{summary.data.people}</dd>
+              <dd className="font-display text-h2 font-semibold text-ink">{summary.data.people}</dd>
             </div>
             <div>
               <dt className="label-caps">Fields</dt>
-              <dd className="text-lg font-semibold text-ink">{summary.data.fields}</dd>
+              <dd className="font-display text-h2 font-semibold text-ink">{summary.data.fields}</dd>
             </div>
             <div>
               <dt className="label-caps">Documents</dt>
-              <dd className="text-lg font-semibold text-ink">{summary.data.documents}</dd>
+              <dd className="font-display text-h2 font-semibold text-ink">{summary.data.documents}</dd>
             </div>
             <div>
               <dt className="label-caps">Relationships</dt>
-              <dd className="text-lg font-semibold text-ink">{summary.data.relationships}</dd>
+              <dd className="font-display text-h2 font-semibold text-ink">{summary.data.relationships}</dd>
             </div>
             <div>
               <dt className="label-caps">Tags</dt>
-              <dd className="text-lg font-semibold text-ink">{summary.data.tags}</dd>
+              <dd className="font-display text-h2 font-semibold text-ink">{summary.data.tags}</dd>
             </div>
           </dl>
           <div className="mt-4 flex flex-wrap gap-x-6 gap-y-1 border-t border-border pt-4 text-sm text-muted">
@@ -83,7 +83,7 @@ function DataSummaryCard() {
           <p className="mt-1 text-sm text-muted">Version {summary.data.version}</p>
         </>
       ) : null}
-    </div>
+    </Card>
   )
 }
 
@@ -96,11 +96,15 @@ function TagRow({ tag }: { tag: Tag }) {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const queryClient = useQueryClient()
 
-  // A rename/delete changes a label shown both in the filter bar and on
-  // people's cards elsewhere in the app, so both caches must refresh.
+  // A rename/delete changes a label shown in the filter bar, on the index
+  // cards, *and* as a chip on every ID-card wearing it. `['person', id]` is a
+  // different key prefix from `['people']`, so those cards were left stale and
+  // kept showing the old name until something happened to refetch them (G-55).
+  // `refetchType: 'all'` reaches the screens that are currently unmounted.
   const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['tags'] })
-    queryClient.invalidateQueries({ queryKey: ['people'] })
+    for (const key of [['tags'], ['people'], ['person']]) {
+      queryClient.invalidateQueries({ queryKey: key, refetchType: 'all' })
+    }
   }
 
   const rename = useMutation({
@@ -128,7 +132,7 @@ function TagRow({ tag }: { tag: Tag }) {
           event.preventDefault()
           rename.mutate()
         }}
-        className="flex items-center gap-3 px-4 py-3 odd:bg-surface-subtle"
+        className="flex items-center gap-2 px-4 py-3 odd:bg-surface-subtle sm:gap-3 sm:px-6"
       >
         <div className="min-w-0 flex-1">
           <input
@@ -166,29 +170,27 @@ function TagRow({ tag }: { tag: Tag }) {
   }
 
   return (
-    <div className="flex items-center gap-3 px-4 py-3 odd:bg-surface-subtle">
+    <div className="flex items-center gap-1 px-4 py-2 odd:bg-surface-subtle sm:gap-3 sm:px-6 sm:py-3">
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{tag.name}</p>
         <p className="text-xs text-muted">
           {tag.person_count} {tag.person_count === 1 ? 'person' : 'people'}
         </p>
       </div>
-      <button
-        type="button"
-        aria-label={`Rename ${tag.name}`}
-        className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-ink"
+      <IconButton
+        label={`Rename ${tag.name}`}
+        className="text-subtle hover:bg-surface-hover hover:text-ink"
         onClick={() => setEditing(true)}
       >
         <Pencil size={16} />
-      </button>
-      <button
-        type="button"
-        aria-label={`Delete ${tag.name}`}
-        className="rounded p-1.5 text-subtle hover:bg-surface-hover hover:text-danger"
+      </IconButton>
+      <IconButton
+        label={`Delete ${tag.name}`}
+        className="text-subtle hover:bg-surface-hover hover:text-danger"
         onClick={() => setConfirmingDelete(true)}
       >
         <Trash2 size={16} />
-      </button>
+      </IconButton>
       {confirmingDelete && (
         <Dialog title="Delete tag?" onClose={() => setConfirmingDelete(false)}>
           <p className="mb-4 text-sm text-muted">
@@ -220,18 +222,18 @@ function TagsSection() {
   const sorted = [...(tags.data ?? [])].sort((a, b) => a.name.localeCompare(b.name))
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface shadow-(--shadow-card)">
-      <SectionHeading title="Tags" />
+    <Card className="overflow-hidden">
+      <SectionHeading title="Tags" count={sorted.length} />
       {tags.isPending ? (
-        <p className="px-4 py-6 text-sm text-muted">Loading…</p>
+        <p className="px-4 py-6 text-sm text-muted sm:px-6">Loading…</p>
       ) : sorted.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-muted">
+        <p className="px-4 py-6 text-sm text-muted sm:px-6">
           No tags yet. Add one from a person's card.
         </p>
       ) : (
         sorted.map((tag) => <TagRow key={tag.id} tag={tag} />)
       )}
-    </div>
+    </Card>
   )
 }
 
@@ -378,9 +380,9 @@ export function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="font-display text-3xl font-semibold">Settings</h1>
-      <div className="rounded-lg border border-border bg-surface p-6 shadow-(--shadow-card)">
-        <h2 className="mb-4 font-display text-lg font-semibold">Change password</h2>
+      <h1 className="font-display text-h2 font-semibold sm:text-h1">Settings</h1>
+      <Card className="p-4 sm:p-6">
+        <h2 className="mb-4 font-display text-h2 font-semibold">Change password</h2>
         <form onSubmit={onSubmit} className="space-y-4">
           <Input
             id="current"
@@ -424,12 +426,12 @@ export function SettingsPage() {
             {change.isPending ? 'Saving…' : 'Change password'}
           </Button>
         </form>
-      </div>
+      </Card>
 
       <DataSummaryCard />
 
-      <div className="rounded-lg border border-border bg-surface p-6 shadow-(--shadow-card)">
-        <h2 className="mb-2 font-display text-lg font-semibold">Encrypted backup</h2>
+      <Card className="p-4 sm:p-6">
+        <h2 className="mb-2 font-display text-h2 font-semibold">Encrypted backup</h2>
         <p className="mb-1 text-sm text-muted">
           Creates one file with everything — people, fields, relationships, tags, documents,
           photos, and sensitive field values — encrypted with the passphrase below.
@@ -477,10 +479,10 @@ export function SettingsPage() {
             {backupMutation.isPending ? 'Preparing…' : 'Create encrypted backup'}
           </Button>
         </form>
-      </div>
+      </Card>
 
-      <div className="rounded-lg border border-border bg-surface p-6 shadow-(--shadow-card)">
-        <h2 className="mb-2 font-display text-lg font-semibold">Restore from backup</h2>
+      <Card className="p-4 sm:p-6">
+        <h2 className="mb-2 font-display text-h2 font-semibold">Restore from backup</h2>
         <p className="mb-4 text-sm text-muted">
           Restores people, fields, relationships, tags, and documents from an encrypted backup
           file. It never deletes or overwrites anything already here.
@@ -495,7 +497,7 @@ export function SettingsPage() {
               type="file"
               accept=".dossier"
               onChange={onRestoreFileChange}
-              className="block w-full text-sm text-ink file:mr-3 file:h-8 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:text-[13px] file:font-medium file:text-ink hover:file:bg-surface-hover"
+              className="block w-full text-sm text-ink file:mr-3 file:h-11 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:text-[13px] file:font-medium file:text-ink hover:file:bg-surface-hover sm:file:h-8"
             />
           </div>
           <Input
@@ -552,10 +554,10 @@ export function SettingsPage() {
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
-      <div className="rounded-lg border border-border bg-surface p-6 shadow-(--shadow-card)">
-        <h2 className="mb-2 font-display text-lg font-semibold">Manual backup &amp; JSON export</h2>
+      <Card className="p-4 sm:p-6">
+        <h2 className="mb-2 font-display text-h2 font-semibold">Manual backup &amp; JSON export</h2>
         <p className="text-sm text-muted">
           All data lives in the <code className="font-mono text-xs">/data</code> volume (database +
           uploads). Back up that directory while the container is stopped — see the README for the
@@ -568,15 +570,26 @@ export function SettingsPage() {
             uploaded documents or photos — those are only covered by the <code className="font-mono text-xs">/data</code>{' '}
             directory backup above.
           </p>
-          <div className="mb-3 flex items-start gap-2">
+          {/* The 16px box stays small on purpose, but the label carries the
+              hit area: htmlFor makes the whole padded row toggle the control,
+              giving a 44px target (12px padding + 20px line + 12px padding)
+              without enlarging the visual checkbox. Tapping the row only
+              flips a visible, reversible state (the plaintext warning
+              appears) — the actual export still needs a separate deliberate
+              tap on the button below, so the larger target adds no
+              accidental-exfiltration risk (SEC-7). */}
+          <div className="mb-3 flex items-start gap-2.5">
             <input
               id={includeSensitiveId}
               type="checkbox"
               checked={includeSensitive}
               onChange={(event) => setIncludeSensitive(event.target.checked)}
-              className="mt-0.5 h-4 w-4 rounded border-border text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="mt-3.5 h-4 w-4 shrink-0 rounded border-border text-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             />
-            <label htmlFor={includeSensitiveId} className="text-sm text-ink">
+            <label
+              htmlFor={includeSensitiveId}
+              className="flex-1 cursor-pointer py-3 text-sm text-ink select-none"
+            >
               Include sensitive field values
             </label>
           </div>
@@ -588,7 +601,7 @@ export function SettingsPage() {
           )}
           <a
             href={exportHref}
-            className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:bg-surface-hover"
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-border bg-surface px-3 text-[13px] font-medium text-ink transition-colors hover:border-border-strong hover:bg-surface-hover sm:h-8"
           >
             <FileJson size={14} aria-hidden /> Export all data (JSON)
           </a>
@@ -612,7 +625,7 @@ export function SettingsPage() {
               type="file"
               accept="application/json,.json"
               onChange={onImportFileChange}
-              className="block w-full text-sm text-ink file:mr-3 file:h-8 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:text-[13px] file:font-medium file:text-ink hover:file:bg-surface-hover"
+              className="block w-full text-sm text-ink file:mr-3 file:h-11 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:text-[13px] file:font-medium file:text-ink hover:file:bg-surface-hover sm:file:h-8"
             />
           </div>
           {parseError && (
@@ -667,7 +680,7 @@ export function SettingsPage() {
             </div>
           )}
         </div>
-      </div>
+      </Card>
 
       <TagsSection />
 

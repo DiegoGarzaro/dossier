@@ -7,6 +7,7 @@ from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from starlette.requests import Request
+from starlette.responses import Response
 from starlette.staticfiles import StaticFiles
 
 from alembic import command
@@ -77,14 +78,44 @@ for router in (
 
 
 if (STATIC_DIR / "index.html").is_file():  # built frontend present (production image)
-    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+    class ImmutableStatic(StaticFiles):
+        """StaticFiles that marks its content-hashed bundles immutable (G-58)."""
+
+        def file_response(self, *args, **kwargs) -> Response:
+            """Attach a long-lived cache header to every served asset.
+
+            Returns:
+                Response: The file response with `Cache-Control` set.
+            """
+            response = super().file_response(*args, **kwargs)
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            return response
+
+    app.mount("/assets", ImmutableStatic(directory=STATIC_DIR / "assets"), name="assets")
+
+    # The shell names content-hashed bundles, so it must be revalidated on every
+    # load: served stale, it pins the browser to the previous build and the app
+    # keeps rendering the old release after a deploy (G-58). Everything it
+    # points at is immutable by construction and may be cached hard.
+    SHELL_CACHE = "no-cache"
+    ASSET_CACHE = "public, max-age=31536000, immutable"
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def spa(full_path: str) -> FileResponse:
-        """Serve the SPA bundle with an index.html fallback for client routes."""
+        """Serve the SPA bundle with an index.html fallback for client routes.
+
+        Args:
+            full_path (str): The requested path below the site root.
+
+        Returns:
+            FileResponse: The requested static file, or the SPA shell.
+
+        Raises:
+            HTTPException: 404 for unmatched `/api` paths.
+        """
         if full_path.startswith("api"):
             raise HTTPException(status_code=404)
         candidate = (STATIC_DIR / full_path).resolve()
         if candidate.is_file() and candidate.is_relative_to(STATIC_DIR):
-            return FileResponse(candidate)
-        return FileResponse(STATIC_DIR / "index.html")
+            return FileResponse(candidate, headers={"Cache-Control": ASSET_CACHE})
+        return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": SHELL_CACHE})

@@ -384,8 +384,8 @@
 
 ### Design system fidelity
 - [x] Light/dark semantic tokens, warm-archival palette, theme toggle + persistence
-- [ ] **Self-host Source Serif 4 / Inter / IBM Plex Mono as woff2** (currently system fallback; needed for NFR-2 no-CDN + intended type)
-- [ ] Field-type badges/icons per Design System §2.4
+- [x] **Self-host Source Serif 4 / Inter / IBM Plex Mono as woff2** — served from `/fonts` (G-05/G-56/G-57)
+- [x] Field-type badges/icons per Design System §2.4 (G-56)
 - [ ] Wordmark/logo asset for "Dossier" (DS-3)
 
 ### Repo & housekeeping

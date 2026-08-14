@@ -152,6 +152,68 @@ describe('PersonPage — favorites', () => {
   })
 })
 
+describe('PersonPage — letterhead chrome', () => {
+  it('shows the file number and a link back to the index in the masthead', async () => {
+    mockApi.mockImplementation(async (path: string, options: { method?: string } = {}) => {
+      const method = options.method ?? 'GET'
+      if (path === '/api/people/1' && method === 'GET') return person()
+      if (path === '/api/tags' && method === 'GET') return []
+      throw new Error(`Unhandled request: ${method} ${path}`)
+    })
+
+    await renderPersonPage()
+
+    expect(screen.getByText(/File № 0001 · Added 2026-01-01/)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'All people' })).toHaveAttribute('href', '/')
+  })
+
+  it('tucks rename, export and delete behind a "More actions" menu', async () => {
+    mockApi.mockImplementation(async (path: string, options: { method?: string } = {}) => {
+      const method = options.method ?? 'GET'
+      if (path === '/api/people/1' && method === 'GET') return person()
+      if (path === '/api/tags' && method === 'GET') return []
+      throw new Error(`Unhandled request: ${method} ${path}`)
+    })
+
+    await renderPersonPage()
+
+    // Nothing leaks before the menu is opened.
+    expect(screen.queryByRole('link', { name: 'Export vCard' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Delete person' })).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'More actions' }))
+
+    expect(screen.getByRole('menuitem', { name: 'Rename person' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Export vCard' })).toHaveAttribute(
+      'href',
+      '/api/people/1/vcard',
+    )
+    expect(screen.getByRole('menuitem', { name: 'Export JSON' })).toHaveAttribute(
+      'href',
+      '/api/people/1/export',
+    )
+
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Delete person' }))
+    expect(await screen.findByRole('dialog', { name: 'Delete person?' })).toBeInTheDocument()
+  })
+
+  it('opens the rename dialog from the menu', async () => {
+    mockApi.mockImplementation(async (path: string, options: { method?: string } = {}) => {
+      const method = options.method ?? 'GET'
+      if (path === '/api/people/1' && method === 'GET') return person()
+      if (path === '/api/tags' && method === 'GET') return []
+      throw new Error(`Unhandled request: ${method} ${path}`)
+    })
+
+    await renderPersonPage()
+
+    await userEvent.click(screen.getByRole('button', { name: 'More actions' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Rename person' }))
+
+    expect(await screen.findByRole('dialog', { name: 'Rename person' })).toBeInTheDocument()
+  })
+})
+
 describe('PersonPage — sensitive fields (SEC-7 regression guard)', () => {
   it('masks a sensitive field value until the reveal control is clicked', async () => {
     mockApi.mockImplementation(async (path: string, options: { method?: string } = {}) => {

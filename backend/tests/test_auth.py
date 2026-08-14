@@ -81,3 +81,41 @@ async def test_login_lockout_after_repeated_failures(client: AsyncClient) -> Non
 
     recovered = await client.post("/api/auth/login", json=ADMIN)
     assert recovered.status_code == 200
+
+
+async def test_api_responses_are_not_cacheable(
+    authed_client: AsyncClient, client: AsyncClient
+) -> None:
+    """Every /api response carries `no-store` (G-51).
+
+    Personal records must never sit in a browser's disk cache or in an
+    intermediary proxy, and a cached `/api/auth/status` would let a stale
+    "not authenticated" answer outlive the session that replaced it.
+    """
+    for path in ("/api/auth/status", "/api/people", "/api/tags"):
+        response = await authed_client.get(path)
+        assert response.status_code == 200, path
+        assert response.headers["cache-control"] == "no-store", path
+
+    # An anonymous status probe is just as sensitive: a cached "not
+    # authenticated" would survive the login that replaced it (G-48).
+    anonymous = await client.get("/api/auth/status")
+    assert anonymous.headers["cache-control"] == "no-store"
+
+
+async def test_spa_shell_is_revalidated_but_hashed_assets_are_cacheable(
+    client: AsyncClient,
+) -> None:
+    """`index.html` must never be served stale (G-58).
+
+    The shell names content-hashed bundles, so a cached copy pins the browser
+    to an old build — the app silently keeps rendering the previous release
+    after a deploy. The hashed assets themselves are immutable by construction.
+    """
+    shell = await client.get("/")
+    assert shell.status_code == 200
+    assert shell.headers["cache-control"] == "no-cache"
+
+    asset = await client.get("/fonts/inter-400.woff2")
+    assert asset.status_code == 200
+    assert "immutable" in asset.headers["cache-control"]
