@@ -22,6 +22,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # The backend serves the built SPA (main.py only registers that route
+      # block when backend/app/static/index.html exists), and G-58's test
+      # exercises it — same as the Dockerfile's two-stage build. Without
+      # this, GET / 404s on a clean checkout and the test fails for a
+      # reason that has nothing to do with what it's checking (G-61).
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend into backend/app/static
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
       # astral-sh/setup-uv no longer publishes moving major-version tags
       # (e.g. "@v9") — only immutable full-version tags. Pinned to the
       # latest full version as the closest equivalent.
